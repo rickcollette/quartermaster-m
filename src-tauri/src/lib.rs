@@ -33,10 +33,18 @@ fn app_ready(app: tauri::AppHandle) -> Result<(), String> {
         .get_webview_window("main")
         .ok_or_else(|| "main application window was not created".to_string())?;
     main.show().map_err(|error| error.to_string())?;
-    main.set_focus().map_err(|error| error.to_string())?;
+
+    // macOS can reject a focus request while the always-on-top splash window is
+    // still active. Closing the splash must not depend on focus succeeding or
+    // the user is left looking at "LOADING..." with the main window behind it.
     if let Some(splash) = app.get_webview_window("splashscreen") {
         splash.close().map_err(|error| error.to_string())?;
     }
+
+    // Showing the application is the important part of this command. A focus
+    // request is best-effort because window managers may legitimately deny it
+    // during application activation.
+    let _ = main.set_focus();
     Ok(())
 }
 

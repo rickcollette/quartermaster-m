@@ -200,9 +200,13 @@ class Editor {
       if (e.key === "F2") { e.preventDefault(); this.inverse = !this.inverse; this.renderStatus(); }
     });
     this.render();this.renderAtrTree();void this.installHostDropHandler();this.hiddenInput.focus();
-    await this.refreshAtr(false);
     await new Promise<void>(resolve=>requestAnimationFrame(()=>requestAnimationFrame(()=>resolve())));
-    try{await tauriInvoke("app_ready");}catch{}
+    try{await tauriInvoke("app_ready");}catch(error){console.error("Could not finish the splash-screen transition:",error);}
+
+    // Restoring a large local tree or an ATR image can take time (and persisted
+    // Windows paths may not exist on macOS). It must not hold the splash screen
+    // open, so restore the explorer state after the editor is already usable.
+    void this.refreshAtr(false);
   }
 
   private menu(id: string, title: string, items: string[][]): string {
