@@ -1,0 +1,11 @@
+[package]
+name = "broadside-core"
+version = "1.4.0"
+edition = "2021"
+authors = ["Rick Collette"]
+license = "GPL-2.0-or-later"
+description = "Reusable Atari ATR/RAW disk image and DOS filesystem library"
+
+[lib]
+name = "broadside_core"
+path = "src/lib.rs"

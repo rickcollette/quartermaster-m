@@ -1,0 +1,24 @@
++--------------------------------------+
+|     QUARTERMASTER/M COMMAND DECK     |
+|        ATASCII WORKSTATION           |
++--------------------------------------+
+| D1: SYSTEM.ATR        STATUS: READY  |
+| FILE: WELCOME.ATA     MODE: ATASCII  |
+| DRIVE: D1:            FS: SPARTADOS  |
++--------------------------------------+
+| [A] EDIT SCREEN      [B] BROWSE DISK |
+| [C] TOKENIZE         [D] EXPORT TEXT |
+| [E] COPY TO D2:      [F] FORMAT MEDIA|
++--------------------------------------+
+| NATIVE GLYPHS + INVERSE VIDEO        |
+| 40 COL / 357 ROW DOCUMENT BUFFER     |
+| MOUSE RECTANGLES PRESERVE THE GRID   |
++--------------------------------------+
+| SELECTED TOOL: SCREEN COMPOSER       |
+| CUT / COPY / PASTE / INVERT GLYPHS   |
+| ACTIVE: D1:>ATASCII>SCREENS          |
++--------------------------------------+
+| TIP: RIGHT-CLICK A SELECTED AREA     |
+|      TO TOGGLE INVERSE VIDEO         |
+| READY. BUILD SOMETHING WONDERFUL.    |
++--------------------------------------+

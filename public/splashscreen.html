@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>QuarterMaster/M</title>
+    <style>
+      * { box-sizing: border-box; }
+      html, body {
+        margin: 0;
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+        background: #fff;
+        font-family: "Courier New", monospace;
+      }
+      main {
+        width: 100%;
+        height: 100%;
+        display: grid;
+        grid-template-rows: 400px 38px;
+      }
+      img {
+        display: block;
+        width: 711px;
+        height: 400px;
+        max-width: 100%;
+        object-fit: contain;
+        background: #fff;
+      }
+      .status {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-top: 2px solid #09266f;
+        background: #f4f6ff;
+        color: #123b98;
+        font-size: 15px;
+        font-weight: 900;
+        letter-spacing: .12em;
+      }
+      .dots {
+        display: inline-block;
+        width: 3ch;
+        overflow: hidden;
+        white-space: nowrap;
+        animation: dots 1.1s steps(4, end) infinite;
+      }
+      @keyframes dots {
+        from { width: 0; }
+        to { width: 3ch; }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <img src="./quartermaster-splash.png" alt="QuarterMaster/M ATASCII Editor" />
+      <div class="status" role="status">LOADING<span class="dots" aria-hidden="true">...</span></div>
+    </main>
+  </body>
+</html>

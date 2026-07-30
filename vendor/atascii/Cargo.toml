@@ -1,0 +1,24 @@
+[package]
+name = "atascii"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.74"
+description = "Lossless ATASCII, ASCII, screen-code, translation, and Atari editor-stream support"
+license = "MIT OR Apache-2.0"
+repository = "https://example.invalid/atascii"
+keywords = ["atari", "atascii", "encoding", "terminal", "bbs"]
+categories = ["encoding", "parser-implementations", "no-std"]
+
+[features]
+default = ["std"]
+std = []
+serde = ["dep:serde"]
+
+[dependencies]
+serde = { version = "1", features = ["derive"], optional = true, default-features = false }
+
+[dev-dependencies]
+
+[[example]]
+name = "dump"
+path = "examples/dump.rs"

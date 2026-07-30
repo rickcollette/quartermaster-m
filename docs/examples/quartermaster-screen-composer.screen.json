@@ -1,0 +1,31 @@
+{
+  "title": "QuarterMaster/M Screen Composer",
+  "output": "quartermaster-screen-composer.ata",
+  "width": 40,
+  "rows": [
+    { "kind": "top" },
+    { "text": "   QUARTERMASTER/M SCREEN COMPOSER", "inverse": true },
+    { "text": "       MOUSE EDITING WORKBENCH", "inverse": true },
+    { "kind": "separator" },
+    { "text": " TOOLBOX                 COLOR: BLUE" },
+    { "text": " CURSOR  BOX  LINE  TEXT  FILL  STAMP" },
+    { "text": " MODE: RECTANGLE        GRID: 40 X 24" },
+    { "kind": "separator" },
+    { "text": " SELECTED: MENU PANEL / 36 X 3" },
+    { "text": " RIGHT-CLICK FOR EDITING COMMANDS" },
+    { "text": " INVERSE PRESERVES ATASCII BIT 7" },
+    { "kind": "separator" },
+    { "text": " CLIPBOARD: ATARI BYTES + GEOMETRY" },
+    { "text": " WINDOWS COPY: READABLE PLAIN TEXT" },
+    { "text": " PASTE TARGET: ROW 09 / COLUMN 03" },
+    { "kind": "separator" },
+    { "text": " [CUT] [COPY] [PASTE] [SELECT ALL]" },
+    { "text": " [SELECT GLYPH] [INVERSE SELECTION]" },
+    { "text": " STATUS: SELECTION READY" },
+    { "kind": "separator" },
+    { "text": " DRAG TO RESIZE THE GOLD RECTANGLE", "inverse": true },
+    { "text": " PRESS ESC TO CLEAR THE SELECTION", "inverse": true },
+    { "text": " SCREEN COMPOSER READY." },
+    { "kind": "bottom" }
+  ]
+}

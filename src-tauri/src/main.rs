@@ -1,0 +1,5 @@
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+
+fn main() {
+    quartermaster_m_lib::run();
+}

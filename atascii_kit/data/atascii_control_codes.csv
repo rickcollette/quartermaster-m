@@ -1,0 +1,17 @@
+decimal,hex,function,typical_key,notes
+27,1B,Escape,ESC,Escape/control prefix
+28,1C,Cursor up,CTRL--,Moves cursor up
+29,1D,Cursor down,CTRL-=,Moves cursor down
+30,1E,Cursor left,CTRL-+,Moves cursor left
+31,1F,Cursor right,CTRL-*,Moves cursor right
+125,7D,Clear screen,CTRL-<,Clears screen
+126,7E,Backspace/delete,BACK SPACE,Deletes previous character
+127,7F,Tab,TAB,Advances to tab stop
+155,9B,End of line,RETURN,ATASCII newline
+156,9C,Delete line,SHIFT-DELETE,Deletes line
+157,9D,Insert line,SHIFT-INSERT,Inserts line
+158,9E,Clear tab stop,CTRL-TAB,Clears tab stop
+159,9F,Set tab stop,SHIFT-TAB,Sets tab stop
+253,FD,Buzzer,CTRL-2,Sounds buzzer
+254,FE,Delete character,CTRL-DELETE,Deletes at cursor
+255,FF,Insert character,CTRL-INSERT,Inserts at cursor

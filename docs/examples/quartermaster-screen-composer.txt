@@ -1,0 +1,24 @@
++--------------------------------------+
+|   QUARTERMASTER/M SCREEN COMPOSER    |
+|       MOUSE EDITING WORKBENCH        |
++--------------------------------------+
+| TOOLBOX                 COLOR: BLUE  |
+| CURSOR  BOX  LINE  TEXT  FILL  STAMP |
+| MODE: RECTANGLE        GRID: 40 X 24 |
++--------------------------------------+
+| SELECTED: MENU PANEL / 36 X 3        |
+| RIGHT-CLICK FOR EDITING COMMANDS     |
+| INVERSE PRESERVES ATASCII BIT 7      |
++--------------------------------------+
+| CLIPBOARD: ATARI BYTES + GEOMETRY    |
+| WINDOWS COPY: READABLE PLAIN TEXT    |
+| PASTE TARGET: ROW 09 / COLUMN 03     |
++--------------------------------------+
+| [CUT] [COPY] [PASTE] [SELECT ALL]    |
+| [SELECT GLYPH] [INVERSE SELECTION]   |
+| STATUS: SELECTION READY              |
++--------------------------------------+
+| DRAG TO RESIZE THE GOLD RECTANGLE    |
+| PRESS ESC TO CLEAR THE SELECTION     |
+| SCREEN COMPOSER READY.               |
++--------------------------------------+

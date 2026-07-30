@@ -1,0 +1,31 @@
+{
+  "title": "QuarterMaster/M Command Deck",
+  "output": "quartermaster-command-deck.ata",
+  "width": 40,
+  "rows": [
+    { "kind": "top" },
+    { "text": "     QUARTERMASTER/M COMMAND DECK", "inverse": true },
+    { "text": "        ATASCII WORKSTATION", "inverse": true },
+    { "kind": "separator" },
+    { "text": " D1: SYSTEM.ATR        STATUS: READY" },
+    { "text": " FILE: WELCOME.ATA     MODE: ATASCII" },
+    { "text": " DRIVE: D1:            FS: SPARTADOS" },
+    { "kind": "separator" },
+    { "text": " [A] EDIT SCREEN      [B] BROWSE DISK" },
+    { "text": " [C] TOKENIZE         [D] EXPORT TEXT" },
+    { "text": " [E] COPY TO D2:      [F] FORMAT MEDIA" },
+    { "kind": "separator" },
+    { "text": " NATIVE GLYPHS + INVERSE VIDEO" },
+    { "text": " 40 COL / 357 ROW DOCUMENT BUFFER" },
+    { "text": " MOUSE RECTANGLES PRESERVE THE GRID" },
+    { "kind": "separator" },
+    { "text": " SELECTED TOOL: SCREEN COMPOSER" },
+    { "text": " CUT / COPY / PASTE / INVERT GLYPHS" },
+    { "text": " ACTIVE: D1:>ATASCII>SCREENS" },
+    { "kind": "separator" },
+    { "text": " TIP: RIGHT-CLICK A SELECTED AREA", "inverse": true },
+    { "text": "      TO TOGGLE INVERSE VIDEO", "inverse": true },
+    { "text": " READY. BUILD SOMETHING WONDERFUL." },
+    { "kind": "bottom" }
+  ]
+}
