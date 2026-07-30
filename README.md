@@ -6,7 +6,7 @@
 
 It combines a real 40-column Atari editing surface, an 80-column XEP-80 mode, native ATASCII rendering and conversion, four browsable ATR drive slots, SpartaDOS directories, DOS 2 images, and a native Atari BASIC tokenizer/detokenizer in one blue-and-white desktop application.
 
-Current development version: **1.0.30**
+Current development version: **1.0.31**
 
 The startup splash is generated during `npm run build` and `npm run tauri dev`: `quartermaster-splash.png` is the source artwork, and `public/quartermaster-splash.png` is the packaged image with the current `VERSION` rendered in the upper-right corner.
 
