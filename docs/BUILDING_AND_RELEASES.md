@@ -31,10 +31,11 @@ npm run tauri dev
 
 This:
 
-1. regenerates Atari glyph assets;
-2. starts Vite on the configured development URL;
-3. starts a debug Tauri application;
-4. reloads frontend changes.
+1. generates the versioned startup splash from `quartermaster-splash.png`;
+2. regenerates Atari glyph assets;
+3. starts Vite on the configured development URL;
+4. starts a debug Tauri application;
+5. reloads frontend changes.
 
 Debug behavior is not identical to a release executable, especially the Windows console subsystem attribute.
 
@@ -47,6 +48,7 @@ npm run build
 This runs:
 
 ```text
+npm run splash
 npm run glyphs
 tsc
 vite build
@@ -174,7 +176,7 @@ Production packaging is intentionally more extensive than development:
 7. audit adjacent runtime DLL dependencies;
 8. verify Windows GUI subsystem;
 9. stage installers, portable EXE, icon, dependency report, and hashes;
-10. generate `current-version` from the staged versioned EXE and MSI names;
+10. generate `current-version` from the staged versioned EXE, MSI, and universal macOS DMG names;
 11. push source and the manifest, then publish the matching files as assets on the `vMAJOR.MINOR.PATCH` GitHub release;
 12. smoke-test on a representative clean Windows VM.
 
@@ -206,14 +208,15 @@ The package helper expects the NSIS and MSI bundle intermediates to exist. It is
 https://raw.githubusercontent.com/rickcollette/quartermaster-m/refs/heads/main/current-version
 ```
 
-The two-line manifest uses:
+The manifest uses:
 
 ```text
 VERSION:exe:PORTABLE_FILENAME.exe
 VERSION:msi:INSTALLER_FILENAME.msi
+VERSION:dmg:MACOS_UNIVERSAL_FILENAME.dmg
 ```
 
-Both entries must use the same semantic `MAJOR.MINOR.PATCH` version. The package helper writes this file from the actual staged filenames.
+All entries must use the same semantic `MAJOR.MINOR.PATCH` version. The package helper writes the Windows filenames from the actual staged files and includes the expected macOS universal DMG filename.
 
 Update assets are downloaded from the matching GitHub release tag:
 
@@ -221,7 +224,7 @@ Update assets are downloaded from the matching GitHub release tag:
 https://github.com/rickcollette/quartermaster-m/releases/download/vVERSION/FILENAME
 ```
 
-Therefore every published manifest must have a corresponding `vVERSION` release containing both files. The portable EXE is written beside the currently running executable and is not launched automatically. The MSI is downloaded to the user's temporary QuarterMaster/M update folder and launched through Windows Installer.
+Therefore every published manifest must have a corresponding `vVERSION` release containing the platform files it names. The portable EXE is written beside the currently running executable and is not launched automatically. The MSI is downloaded to the user's temporary QuarterMaster/M update folder and launched through Windows Installer. The macOS DMG is downloaded to the same update folder and opened.
 
 The native updater validates semantic versions and filenames, rejects path components, rechecks the manifest before downloading, uses fixed HTTPS hosts, and refuses to overwrite the running executable.
 
@@ -255,12 +258,13 @@ Rebuild the native executable after changing icons.
 
 ### Splash
 
-The source splash is `quartermaster-splash.png`. The runtime copy is `public/quartermaster-splash.png`, used by `public/splashscreen.html`. Keep the copies synchronized when updating the artwork.
+The source splash is `quartermaster-splash.png`. `npm run splash` generates `public/quartermaster-splash.png`, used by `public/splashscreen.html`, with the current `VERSION` rendered in the upper-right corner. Do not edit the generated runtime copy by hand.
 
 ## Generated files
 
 - `src/generated/atari-glyphs.svg`
 - `src/generated/atari-glyphs.css`
+- `public/quartermaster-splash.png`
 - `docs/ATASCII_REFERENCE.md`
 - `dist/`
 - `src-tauri/target/`

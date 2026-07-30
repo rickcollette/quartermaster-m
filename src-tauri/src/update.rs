@@ -19,8 +19,9 @@ type Result<T> = std::result::Result<T, String>;
 #[derive(Clone, Debug, PartialEq)]
 struct Manifest {
     version: String,
-    exe_file: String,
-    msi_file: String,
+    exe_file: Option<String>,
+    msi_file: Option<String>,
+    dmg_file: Option<String>,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -29,8 +30,10 @@ pub struct UpdateInfo {
     current_version: String,
     latest_version: String,
     state: String,
-    exe_file: String,
-    msi_file: String,
+    platform: String,
+    exe_file: Option<String>,
+    msi_file: Option<String>,
+    dmg_file: Option<String>,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -81,6 +84,7 @@ fn parse_manifest(text: &str) -> Result<Manifest> {
     let mut version: Option<String> = None;
     let mut exe_file: Option<String> = None;
     let mut msi_file: Option<String> = None;
+    let mut dmg_file: Option<String> = None;
     for (index, raw_line) in text.lines().enumerate() {
         let line = raw_line.trim();
         if line.is_empty() || line.starts_with('#') {
@@ -114,13 +118,23 @@ fn parse_manifest(text: &str) -> Result<Manifest> {
                     return Err("current-version contains more than one msi entry".into());
                 }
             }
+            "dmg" => {
+                validate_asset_name(filename, ".dmg")?;
+                if dmg_file.replace(filename.to_string()).is_some() {
+                    return Err("current-version contains more than one dmg entry".into());
+                }
+            }
             _ => return Err(format!("unsupported current-version asset type {kind:?}")),
         }
     }
+    if exe_file.is_none() && msi_file.is_none() && dmg_file.is_none() {
+        return Err("current-version has no update assets".into());
+    }
     Ok(Manifest {
         version: version.ok_or_else(|| "current-version is empty".to_string())?,
-        exe_file: exe_file.ok_or_else(|| "current-version has no exe entry".to_string())?,
-        msi_file: msi_file.ok_or_else(|| "current-version has no msi entry".to_string())?,
+        exe_file,
+        msi_file,
+        dmg_file,
     })
 }
 
@@ -165,9 +179,21 @@ fn update_info(manifest: Manifest) -> Result<UpdateInfo> {
         current_version: APP_VERSION.into(),
         latest_version: manifest.version.clone(),
         state: update_state(&manifest.version)?.into(),
+        platform: current_platform().into(),
         exe_file: manifest.exe_file,
         msi_file: manifest.msi_file,
+        dmg_file: manifest.dmg_file,
     })
+}
+
+fn current_platform() -> &'static str {
+    if cfg!(target_os = "windows") {
+        "windows"
+    } else if cfg!(target_os = "macos") {
+        "macos"
+    } else {
+        "other"
+    }
 }
 
 fn release_url(version: &str, filename: &str) -> String {
@@ -249,14 +275,14 @@ fn download_portable() -> Result<UpdateDownload> {
     let directory = current
         .parent()
         .ok_or_else(|| "the running executable has no containing folder".to_string())?;
-    let destination = directory.join(&manifest.exe_file);
+    let exe_file = manifest
+        .exe_file
+        .ok_or_else(|| "current-version has no Windows portable EXE entry".to_string())?;
+    let destination = directory.join(&exe_file);
     if destination == current {
         return Err("the update filename would overwrite the running executable".into());
     }
-    download_file(
-        &release_url(&manifest.version, &manifest.exe_file),
-        &destination,
-    )?;
+    download_file(&release_url(&manifest.version, &exe_file), &destination)?;
     Ok(UpdateDownload {
         version: manifest.version,
         path: destination.to_string_lossy().into_owned(),
@@ -266,17 +292,40 @@ fn download_portable() -> Result<UpdateDownload> {
 
 fn download_installer() -> Result<UpdateDownload> {
     let manifest = require_newer_manifest()?;
+    let msi_file = manifest
+        .msi_file
+        .ok_or_else(|| "current-version has no Windows MSI entry".to_string())?;
     let directory = std::env::temp_dir().join("QuarterMaster-M").join("updates");
-    let destination = directory.join(&manifest.msi_file);
-    download_file(
-        &release_url(&manifest.version, &manifest.msi_file),
-        &destination,
-    )?;
+    let destination = directory.join(&msi_file);
+    download_file(&release_url(&manifest.version, &msi_file), &destination)?;
     Command::new("msiexec.exe")
         .arg("/i")
         .arg(&destination)
         .spawn()
         .map_err(|error| format!("cannot launch Windows Installer: {error}"))?;
+    Ok(UpdateDownload {
+        version: manifest.version,
+        path: destination.to_string_lossy().into_owned(),
+        launched: true,
+    })
+}
+
+fn download_macos_dmg() -> Result<UpdateDownload> {
+    let manifest = require_newer_manifest()?;
+    let dmg_file = manifest
+        .dmg_file
+        .ok_or_else(|| "current-version has no macOS DMG entry".to_string())?;
+    let directory = std::env::temp_dir().join("QuarterMaster-M").join("updates");
+    let destination = directory.join(&dmg_file);
+    download_file(&release_url(&manifest.version, &dmg_file), &destination)?;
+    if cfg!(target_os = "macos") {
+        Command::new("open")
+            .arg(&destination)
+            .spawn()
+            .map_err(|error| format!("cannot open macOS disk image: {error}"))?;
+    } else {
+        return Err("macOS updates are only supported on macOS".into());
+    }
     Ok(UpdateDownload {
         version: manifest.version,
         path: destination.to_string_lossy().into_owned(),
@@ -305,6 +354,13 @@ pub async fn download_and_install_update() -> Result<UpdateDownload> {
         .map_err(|error| format!("installer update task failed: {error}"))?
 }
 
+#[tauri::command]
+pub async fn download_macos_update() -> Result<UpdateDownload> {
+    tauri::async_runtime::spawn_blocking(download_macos_dmg)
+        .await
+        .map_err(|error| format!("macOS update task failed: {error}"))?
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -320,9 +376,24 @@ mod tests {
             manifest,
             Manifest {
                 version: "1.2.3".into(),
-                exe_file: "quartermaster-m-1.2.3.exe".into(),
-                msi_file: "QuarterMaster-M_1.2.3_x64_en-US.msi".into(),
+                exe_file: Some("quartermaster-m-1.2.3.exe".into()),
+                msi_file: Some("QuarterMaster-M_1.2.3_x64_en-US.msi".into()),
+                dmg_file: None,
             }
+        );
+    }
+
+    #[test]
+    fn parses_macos_manifest_entry() {
+        let manifest = parse_manifest(
+            "1.2.3:exe:quartermaster-m-1.2.3.exe\n\
+             1.2.3:msi:QuarterMaster-M_1.2.3_x64_en-US.msi\n\
+             1.2.3:dmg:QuarterMaster-M_1.2.3_universal.dmg\n",
+        )
+        .unwrap();
+        assert_eq!(
+            manifest.dmg_file,
+            Some("QuarterMaster-M_1.2.3_universal.dmg".into())
         );
     }
 

@@ -1,15 +1,16 @@
 {
   "name": "quartermaster-m",
   "private": true,
-  "version": "1.0.29",
+  "version": "1.0.30",
   "type": "module",
   "scripts": {
+    "splash": "node scripts/generate_splash_asset.mjs",
     "glyphs": "node scripts/generate_glyph_assets.mjs",
     "docs:atascii": "node scripts/generate_atascii_docs.mjs",
     "docs:demos": "node scripts/generate_demo_atascii.mjs",
     "docs:screenshots": "node scripts/capture_docs_screenshots.mjs",
-    "dev": "npm run glyphs && vite",
-    "build": "npm run glyphs && tsc && vite build",
+    "dev": "npm run splash && npm run glyphs && vite",
+    "build": "npm run splash && npm run glyphs && tsc && vite build",
     "preview": "vite preview",
     "tauri": "tauri"
   },
@@ -19,6 +20,7 @@
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2.8.0",
+    "pngjs": "^7.0.0",
     "typescript": "^5.8.3",
     "vite": "^7.0.0"
   }

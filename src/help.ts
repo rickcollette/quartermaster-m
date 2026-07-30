@@ -252,8 +252,8 @@ const helpSections: HelpSection[] = [
       <p class="support-url"><a href="${SUPPORT_URL}" target="_blank" rel="noopener noreferrer">${SUPPORT_URL}</a></p>
       <button type="button" class="help-copy-button" data-copy-support>Copy support URL</button>
       <h3>Check for updates</h3>
-      <p>Choose <strong>Help → Check for Updates</strong>. QuarterMaster/M compares its installed semantic version with the published release manifest. If a newer version exists, <strong>Download Portable EXE</strong> saves the versioned executable beside the copy currently running; close the application and run that downloaded file. <strong>Download &amp; Install MSI</strong> downloads the package to a temporary update folder and launches Windows Installer.</p>
-      <p class="help-callout">The portable download requires write access to the current application folder and expects WebView2 to be installed. The MSI is the recommended choice for a normal installation and bare-machine prerequisites.</p>
+      <p>Choose <strong>Help → Check for Updates</strong>. QuarterMaster/M compares its installed semantic version with the published release manifest. On Windows, <strong>Download Portable EXE</strong> saves the versioned executable beside the copy currently running, and <strong>Download &amp; Install MSI</strong> downloads the package to a temporary update folder and launches Windows Installer. On macOS, <strong>Download macOS DMG</strong> downloads the universal disk image to the update folder and opens it.</p>
+      <p class="help-callout">The portable Windows download requires write access to the current application folder and expects WebView2 to be installed. The MSI is the recommended Windows choice for a normal installation and bare-machine prerequisites. macOS builds are distributed as universal DMGs.</p>
       <h3>Include this information</h3>
       <ul>
         <li>QuarterMaster/M version from the upper-right title bar.</li>

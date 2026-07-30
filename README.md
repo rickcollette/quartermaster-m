@@ -1,12 +1,14 @@
 # QuarterMaster/M
 
-![QuarterMaster/M splash screen](quartermaster-splash.png)
+![QuarterMaster/M versioned splash screen](public/quartermaster-splash.png)
 
-**QuarterMaster/M is a Windows desktop editor and disk-workbench for Atari 8-bit text, ATASCII screens, Atari BASIC programs, and ATR disk images.**
+**QuarterMaster/M is a desktop editor and disk-workbench for Atari 8-bit text, ATASCII screens, Atari BASIC programs, and ATR disk images.**
 
 It combines a real 40-column Atari editing surface, an 80-column XEP-80 mode, native ATASCII rendering and conversion, four browsable ATR drive slots, SpartaDOS directories, DOS 2 images, and a native Atari BASIC tokenizer/detokenizer in one blue-and-white desktop application.
 
-Current development version: **1.0.29**
+Current development version: **1.0.30**
+
+The startup splash is generated during `npm run build` and `npm run tauri dev`: `quartermaster-splash.png` is the source artwork, and `public/quartermaster-splash.png` is the packaged image with the current `VERSION` rendered in the upper-right corner.
 
 ## See it in action
 
@@ -29,7 +31,7 @@ Current development version: **1.0.29**
 - Exports ATR content as readable Windows text or extracts exact raw bytes.
 - Tokenizes and detokenizes Atari BASIC natively in Rust—no console utility or external converter is required.
 - Shows an immediate splash screen and animated activity feedback for longer operations.
-- Checks the published release manifest from **Help → Check for Updates**, with portable EXE download or MSI installation.
+- Checks the published release manifest from **Help → Check for Updates**, with Windows portable EXE/MSI updates and a macOS universal DMG update.
 - Starts as a Windows GUI application without opening a command window.
 
 ## Quick start

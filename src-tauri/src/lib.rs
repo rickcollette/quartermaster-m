@@ -18,7 +18,9 @@ use basic::{
     basic_save_listing_to_atr, basic_tokenize_host, basic_tokenize_to_atr,
 };
 use document::{load_document, save_document};
-use update::{check_for_updates, download_and_install_update, download_portable_update};
+use update::{
+    check_for_updates, download_and_install_update, download_macos_update, download_portable_update,
+};
 
 #[tauri::command]
 fn app_version() -> &'static str {
@@ -51,6 +53,7 @@ pub fn run() {
             check_for_updates,
             download_portable_update,
             download_and_install_update,
+            download_macos_update,
             atr_create,
             atr_mount,
             atr_select_drive,
