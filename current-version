@@ -1,6 +1,6 @@
-1.0.32:exe:quartermaster-m-1.0.32.exe
-1.0.32:msi:QuarterMaster-M_1.0.32_x64_en-US.msi
-1.0.32:dmg:QuarterMaster-M_1.0.32_universal.dmg
-1.0.32:appimage:QuarterMaster-M_1.0.32_amd64.AppImage
-1.0.32:deb:QuarterMaster-M_1.0.32_amd64.deb
-1.0.32:rpm:QuarterMaster-M-1.0.32-1.x86_64.rpm
+1.0.33:exe:quartermaster-m-1.0.33.exe
+1.0.33:msi:QuarterMaster-M_1.0.33_x64_en-US.msi
+1.0.33:dmg:QuarterMaster-M_1.0.33_universal.dmg
+1.0.33:appimage:QuarterMaster-M_1.0.33_amd64.AppImage
+1.0.33:deb:QuarterMaster-M_1.0.33_amd64.deb
+1.0.33:rpm:QuarterMaster-M-1.0.33-1.x86_64.rpm
