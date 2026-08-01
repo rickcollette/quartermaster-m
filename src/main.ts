@@ -1276,10 +1276,10 @@ export class Editor {
       <p class="update-status" role="status" aria-live="polite">Checking the published version…</p>
       <dl class="update-versions" hidden><dt>Installed</dt><dd data-update-current></dd><dt>Published</dt><dd data-update-latest></dd></dl>
       <p class="update-files" hidden></p>
-      <div class="update-actions"><button type="button" data-update-close>Close</button><button type="button" data-update-exe hidden>Download Portable EXE</button><button type="button" class="primary" data-update-msi hidden>Download &amp; Install MSI</button><button type="button" class="primary" data-update-dmg hidden>Download macOS DMG</button></div>
+      <div class="update-actions"><button type="button" data-update-close>Close</button><button type="button" data-update-exe hidden>Download Portable EXE</button><button type="button" class="primary" data-update-setup hidden>Download &amp; Run Setup</button><button type="button" class="primary" data-update-dmg hidden>Download macOS DMG</button></div>
     </section>`;
     const status=backdrop.querySelector<HTMLElement>(".update-status")!,versions=backdrop.querySelector<HTMLElement>(".update-versions")!,files=backdrop.querySelector<HTMLElement>(".update-files")!;
-    const exeButton=backdrop.querySelector<HTMLButtonElement>("[data-update-exe]")!,msiButton=backdrop.querySelector<HTMLButtonElement>("[data-update-msi]")!,dmgButton=backdrop.querySelector<HTMLButtonElement>("[data-update-dmg]")!;
+    const exeButton=backdrop.querySelector<HTMLButtonElement>("[data-update-exe]")!,setupButton=backdrop.querySelector<HTMLButtonElement>("[data-update-setup]")!,dmgButton=backdrop.querySelector<HTMLButtonElement>("[data-update-dmg]")!;
     const close=()=>{document.removeEventListener("keydown",onKeyDown);backdrop.remove();this.hiddenInput.focus();};
     const onKeyDown=(event:KeyboardEvent)=>{if(event.key==="Escape"&&!this.isBusy){event.preventDefault();close();}};
     backdrop.querySelector("[data-update-close]")!.addEventListener("click",close);
@@ -1298,37 +1298,37 @@ export class Editor {
         if(info.platform==="macos"&&info.dmgFile){
           files.textContent=`macOS DMG: ${info.dmgFile}`;
           dmgButton.hidden=false;
-        }else if(info.platform==="windows"&&info.exeFile&&info.msiFile){
-          files.textContent=`Portable: ${info.exeFile} · Installer: ${info.msiFile}`;
-          exeButton.hidden=false;msiButton.hidden=false;
+        }else if(info.platform==="windows"&&(info.exeFile||info.setupFile)){
+          files.textContent=[info.exeFile?`Portable: ${info.exeFile}`:"",info.setupFile?`Setup: ${info.setupFile}`:""].filter(Boolean).join(" · ");
+          exeButton.hidden=!info.exeFile;setupButton.hidden=!info.setupFile;
         }else if(info.platform==="linux"&&info.linuxFiles.length){
           files.textContent=`Linux package${info.linuxFiles.length===1?"":"s"}: ${info.linuxFiles.join(" · ")}`;
         }else{
           files.textContent="No automatic update package is available for this platform.";
         }
-        const setDownloading=(downloading:boolean)=>{exeButton.disabled=downloading;msiButton.disabled=downloading;dmgButton.disabled=downloading;};
+        const setDownloading=(downloading:boolean)=>{exeButton.disabled=downloading;setupButton.disabled=downloading;dmgButton.disabled=downloading;};
         exeButton.addEventListener("click",async()=>{
           setDownloading(true);status.textContent="Downloading the portable update…";
           try{
             const result=await invoke<UpdateDownload>("download_portable_update");
             status.textContent=`Version ${result.version} downloaded beside this application. Close QuarterMaster/M, then run: ${result.path}`;
-            exeButton.hidden=true;msiButton.hidden=true;
+            exeButton.hidden=true;setupButton.hidden=true;
           }catch(error){status.textContent=`Update download failed: ${String(error)}`;setDownloading(false);}
         });
-        msiButton.addEventListener("click",async()=>{
-          setDownloading(true);status.textContent="Downloading the Windows Installer…";
+        setupButton.addEventListener("click",async()=>{
+          setDownloading(true);status.textContent="Downloading the Windows setup installer…";
           try{
             const result=await invoke<UpdateDownload>("download_and_install_update");
-            status.textContent=`Version ${result.version} downloaded. Windows Installer has been launched from: ${result.path}`;
-            exeButton.hidden=true;msiButton.hidden=true;
-          }catch(error){status.textContent=`Installer download failed: ${String(error)}`;setDownloading(false);}
+            status.textContent=`Version ${result.version} downloaded. Windows setup has been launched from: ${result.path}`;
+            exeButton.hidden=true;setupButton.hidden=true;
+          }catch(error){status.textContent=`Setup download failed: ${String(error)}`;setDownloading(false);}
         });
         dmgButton.addEventListener("click",async()=>{
           setDownloading(true);status.textContent="Downloading the macOS disk image…";
           try{
             const result=await invoke<UpdateDownload>("download_macos_update");
             status.textContent=`Version ${result.version} downloaded and opened from: ${result.path}`;
-            exeButton.hidden=true;msiButton.hidden=true;dmgButton.hidden=true;
+            exeButton.hidden=true;setupButton.hidden=true;dmgButton.hidden=true;
           }catch(error){status.textContent=`macOS update download failed: ${String(error)}`;setDownloading(false);}
         });
       }

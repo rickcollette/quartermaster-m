@@ -194,7 +194,7 @@ Production packaging is intentionally more extensive than development:
 2. clean old package staging;
 3. run frontend/Rust checks and tests appropriate for release;
 4. run the Tauri bundle build;
-5. confirm MSI and NSIS outputs;
+5. confirm the NSIS setup output and optional MSI output;
 6. include/audit the offline x64 WebView2 runtime;
 7. audit adjacent runtime DLL dependencies;
 8. verify Windows GUI subsystem;
@@ -221,7 +221,7 @@ Stage and audit the existing Windows production build:
 python scripts\package_win64.py
 ```
 
-The package helper expects the NSIS and MSI bundle intermediates to exist. It is not the development EXE staging command. It writes Windows update entries only; add macOS and Linux entries to `current-version` after those platform packages are staged.
+The package helper expects the NSIS bundle intermediate to exist. It is not the development EXE staging command. It writes Windows update entries for the portable EXE and NSIS setup EXE only; add macOS and Linux entries to `current-version` after those platform packages are staged.
 
 Build the universal macOS package on the Mac build host:
 
@@ -256,7 +256,7 @@ The manifest uses:
 
 ```text
 VERSION:exe:PORTABLE_FILENAME.exe
-VERSION:msi:INSTALLER_FILENAME.msi
+VERSION:setup:WINDOWS_SETUP_FILENAME.exe
 VERSION:dmg:MACOS_UNIVERSAL_FILENAME.dmg
 VERSION:appimage:LINUX_APPIMAGE_FILENAME.AppImage
 VERSION:deb:LINUX_DEB_FILENAME.deb
@@ -264,7 +264,7 @@ VERSION:rpm:LINUX_RPM_FILENAME.rpm
 ```
 
 Entries are grouped by platform by the native parser. Windows consumes `exe` and
-`msi`, macOS consumes `dmg`, and Linux consumes `appimage`, `deb`, and `rpm`.
+`setup`, macOS consumes `dmg`, and Linux consumes `appimage`, `deb`, and `rpm`.
 Each platform's entries must agree on their semantic `MAJOR.MINOR.PATCH` version,
 but platform versions can differ during a staggered rollout.
 
@@ -276,10 +276,10 @@ https://github.com/rickcollette/quartermaster-m/releases/download/vVERSION/FILEN
 
 Therefore every published manifest entry must have a corresponding `vVERSION`
 release containing the platform file it names. The portable EXE is written beside
-the currently running executable and is not launched automatically. The MSI is
-downloaded to the user's temporary QuarterMaster/M update folder and launched
-through Windows Installer. The macOS DMG is downloaded to the same update folder
-and opened. Linux package entries are shown only on Linux.
+the currently running executable and is not launched automatically. The Windows
+setup EXE is downloaded to the user's temporary QuarterMaster/M update folder
+and launched directly. The macOS DMG is downloaded to the same update folder and
+opened. Linux package entries are shown only on Linux.
 
 The native updater validates semantic versions and filenames, rejects path components, rechecks the manifest before downloading, uses fixed HTTPS hosts, and refuses to overwrite the running executable.
 
@@ -294,7 +294,7 @@ The Tauri bundle configuration uses:
 }
 ```
 
-A production installer should therefore carry the x64 offline WebView2 bootstrap payload and install it silently when missing. The package audit checks that both MSI and NSIS sources reference the payload and that non-system runtime DLL imports are staged.
+A production installer should therefore carry the x64 offline WebView2 bootstrap payload and install it silently when missing. The package audit checks that the NSIS setup source references the payload and that non-system runtime DLL imports are staged.
 
 The standalone development EXE does not itself contain an installer workflow. Test it on a machine that already has WebView2.
 

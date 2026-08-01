@@ -30,7 +30,7 @@ export interface UpdateInfo {
   state: "available" | "current" | "newer";
   platform: "windows" | "macos" | "linux" | "other";
   exeFile: string | null;
-  msiFile: string | null;
+  setupFile: string | null;
   dmgFile: string | null;
   linuxFiles: string[];
 }

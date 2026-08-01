@@ -27,7 +27,8 @@ struct Manifest {
 struct PlatformManifest {
     version: String,
     exe_file: Option<String>,
-    msi_file: Option<String>,
+    setup_file: Option<String>,
+    legacy_msi_file: Option<String>,
     dmg_file: Option<String>,
     linux_files: Vec<String>,
 }
@@ -40,7 +41,7 @@ pub struct UpdateInfo {
     state: String,
     platform: String,
     exe_file: Option<String>,
-    msi_file: Option<String>,
+    setup_file: Option<String>,
     dmg_file: Option<String>,
     linux_files: Vec<String>,
 }
@@ -144,10 +145,17 @@ fn parse_manifest(text: &str) -> Result<Manifest> {
                     return Err("current-version contains more than one exe entry".into());
                 }
             }
+            "setup" => {
+                validate_asset_name(filename, ".exe")?;
+                let entry = platform_entry_mut(&mut manifest.windows, line_version, "Windows")?;
+                if entry.setup_file.replace(filename.to_string()).is_some() {
+                    return Err("current-version contains more than one setup entry".into());
+                }
+            }
             "msi" => {
                 validate_asset_name(filename, ".msi")?;
                 let entry = platform_entry_mut(&mut manifest.windows, line_version, "Windows")?;
-                if entry.msi_file.replace(filename.to_string()).is_some() {
+                if entry.legacy_msi_file.replace(filename.to_string()).is_some() {
                     return Err("current-version contains more than one msi entry".into());
                 }
             }
@@ -240,7 +248,7 @@ fn update_info_for(manifest: Manifest, platform: &str) -> Result<UpdateInfo> {
         state: update_state(&latest_version)?.into(),
         platform: platform.into(),
         exe_file: platform_manifest.and_then(|entry| entry.exe_file.clone()),
-        msi_file: platform_manifest.and_then(|entry| entry.msi_file.clone()),
+        setup_file: platform_manifest.and_then(|entry| entry.setup_file.clone()),
         dmg_file: platform_manifest.and_then(|entry| entry.dmg_file.clone()),
         linux_files: platform_manifest
             .map(|entry| entry.linux_files.clone())
@@ -367,17 +375,15 @@ fn download_installer() -> Result<UpdateDownload> {
         return Err("Windows installer updates are only supported on Windows".into());
     }
     let manifest = require_newer_manifest_for("windows")?;
-    let msi_file = manifest
-        .msi_file
-        .ok_or_else(|| "current-version has no Windows MSI entry".to_string())?;
+    let setup_file = manifest
+        .setup_file
+        .ok_or_else(|| "current-version has no Windows setup entry".to_string())?;
     let directory = std::env::temp_dir().join("QuarterMaster-M").join("updates");
-    let destination = directory.join(&msi_file);
-    download_file(&release_url(&manifest.version, &msi_file), &destination)?;
-    Command::new("msiexec.exe")
-        .arg("/i")
-        .arg(&destination)
+    let destination = directory.join(&setup_file);
+    download_file(&release_url(&manifest.version, &setup_file), &destination)?;
+    Command::new(&destination)
         .spawn()
-        .map_err(|error| format!("cannot launch Windows Installer: {error}"))?;
+        .map_err(|error| format!("cannot launch Windows setup: {error}"))?;
     Ok(UpdateDownload {
         version: manifest.version,
         path: destination.to_string_lossy().into_owned(),
@@ -443,7 +449,7 @@ mod tests {
     fn parses_the_published_manifest_shape() {
         let manifest = parse_manifest(
             "1.2.3:exe:quartermaster-m-1.2.3.exe\n\
-             1.2.3:msi:QuarterMaster-M_1.2.3_x64_en-US.msi\n",
+             1.2.3:setup:QuarterMaster-M_1.2.3_x64-setup.exe\n",
         )
         .unwrap();
         assert_eq!(
@@ -451,7 +457,8 @@ mod tests {
             Some(PlatformManifest {
                 version: "1.2.3".into(),
                 exe_file: Some("quartermaster-m-1.2.3.exe".into()),
-                msi_file: Some("QuarterMaster-M_1.2.3_x64_en-US.msi".into()),
+                setup_file: Some("QuarterMaster-M_1.2.3_x64-setup.exe".into()),
+                legacy_msi_file: None,
                 dmg_file: None,
                 linux_files: vec![],
             })
@@ -464,7 +471,7 @@ mod tests {
     fn parses_platform_specific_manifest_entries() {
         let manifest = parse_manifest(
             "1.2.3:exe:quartermaster-m-1.2.3.exe\n\
-             1.2.3:msi:QuarterMaster-M_1.2.3_x64_en-US.msi\n\
+             1.2.3:setup:QuarterMaster-M_1.2.3_x64-setup.exe\n\
              1.2.4:dmg:QuarterMaster-M_1.2.4_universal.dmg\n\
              1.2.5:appimage:QuarterMaster-M_1.2.5_x86_64.AppImage\n\
              1.2.5:deb:quartermaster-m_1.2.5_amd64.deb\n",
@@ -492,7 +499,7 @@ mod tests {
     fn update_info_only_exposes_relevant_platform_assets() {
         let manifest = parse_manifest(
             "1.2.3:exe:quartermaster-m-1.2.3.exe\n\
-             1.2.3:msi:QuarterMaster-M_1.2.3_x64_en-US.msi\n\
+             1.2.3:setup:QuarterMaster-M_1.2.3_x64-setup.exe\n\
              1.2.4:dmg:QuarterMaster-M_1.2.4_universal.dmg\n\
              1.2.5:appimage:QuarterMaster-M_1.2.5_x86_64.AppImage\n",
         )
@@ -501,7 +508,7 @@ mod tests {
         let macos = update_info_for(manifest.clone(), "macos").unwrap();
         assert_eq!(macos.latest_version, "1.2.4");
         assert_eq!(macos.exe_file, None);
-        assert_eq!(macos.msi_file, None);
+        assert_eq!(macos.setup_file, None);
         assert_eq!(
             macos.dmg_file,
             Some("QuarterMaster-M_1.2.4_universal.dmg".into())
@@ -515,6 +522,10 @@ mod tests {
         assert_eq!(
             windows.exe_file,
             Some("quartermaster-m-1.2.3.exe".into())
+        );
+        assert_eq!(
+            windows.setup_file,
+            Some("QuarterMaster-M_1.2.3_x64-setup.exe".into())
         );
 
         let linux = update_info_for(manifest, "linux").unwrap();
@@ -536,14 +547,19 @@ mod tests {
     #[test]
     fn rejects_paths_and_mixed_manifest_versions() {
         assert!(parse_manifest(
-            "1.2.3:exe:..\\evil.exe\n1.2.3:msi:QuarterMaster-M_1.2.3_x64_en-US.msi"
+            "1.2.3:exe:..\\evil.exe\n1.2.3:setup:QuarterMaster-M_1.2.3_x64-setup.exe"
         )
         .is_err());
         assert!(parse_manifest(
             "1.2.3:exe:quartermaster-m-1.2.3.exe\n\
-             1.2.4:msi:QuarterMaster-M_1.2.4_x64_en-US.msi"
+             1.2.4:setup:QuarterMaster-M_1.2.4_x64-setup.exe"
         )
         .is_err());
         assert!(parse_manifest("1.2.3:appimage:../bad.AppImage").is_err());
+        assert!(parse_manifest(
+            "1.2.3:msi:QuarterMaster-M_1.2.3_x64_en-US.msi\n\
+             1.2.3:msi:QuarterMaster-M_1.2.3_x64_alt_en-US.msi"
+        )
+        .is_err());
     }
 }

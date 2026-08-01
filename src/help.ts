@@ -42,7 +42,7 @@ const helpSections: HelpSection[] = [
         <dt>View</dt><dd>Switch between a 40-column Atari surface and an 80-column XEP-80 surface.</dd>
         <dt>ATR</dt><dd>Open/Mount, Refresh Directory, Open File From ATR, Create ATR, and Unmount ATR.</dd>
         <dt>BASIC</dt><dd>Open, tokenize, or export Atari BASIC programs on the host or inside the active ATR.</dd>
-        <dt>Help</dt><dd>Open this Help Center directly at the guide, keyboard reference, ATASCII map, or support page. Check for Updates compares the installed version with the published release and offers portable EXE or MSI installation. License displays the complete bundled GPL license, and About identifies the application, version, author, and handle.</dd>
+        <dt>Help</dt><dd>Open this Help Center directly at the guide, keyboard reference, ATASCII map, or support page. Check for Updates compares the installed version with the published release and offers portable EXE or setup installation. License displays the complete bundled GPL license, and About identifies the application, version, author, and handle.</dd>
       </dl>
       <h3>Toolbar</h3>
       <p>40 COL and XEP-80 are on the far left. New, Open, and Save sit directly above the editor. The location label identifies their current target. The ATASCII/ASCII selector controls document encoding. Inverse changes the inverse state of newly typed glyphs; Insert toggles insert/overwrite behavior; Clear resets the full document after confirmation.</p>
@@ -252,8 +252,8 @@ const helpSections: HelpSection[] = [
       <p class="support-url"><a href="${SUPPORT_URL}" target="_blank" rel="noopener noreferrer">${SUPPORT_URL}</a></p>
       <button type="button" class="help-copy-button" data-copy-support>Copy support URL</button>
       <h3>Check for updates</h3>
-      <p>Choose <strong>Help → Check for Updates</strong>. QuarterMaster/M compares its installed semantic version with the published release manifest for the current platform only. On Windows, <strong>Download Portable EXE</strong> saves the versioned executable beside the copy currently running, and <strong>Download &amp; Install MSI</strong> downloads the package to a temporary update folder and launches Windows Installer. On macOS, <strong>Download macOS DMG</strong> downloads the universal disk image to the update folder and opens it. On Linux, relevant package names are shown when published.</p>
-      <p class="help-callout">The portable Windows download requires write access to the current application folder and expects WebView2 to be installed. The MSI is the recommended Windows choice for a normal installation and bare-machine prerequisites. macOS builds are distributed as universal DMGs.</p>
+      <p>Choose <strong>Help → Check for Updates</strong>. QuarterMaster/M compares its installed semantic version with the published release manifest for the current platform only. On Windows, <strong>Download Portable EXE</strong> saves the versioned executable beside the copy currently running, and <strong>Download &amp; Run Setup</strong> downloads the setup installer to a temporary update folder and launches it. On macOS, <strong>Download macOS DMG</strong> downloads the universal disk image to the update folder and opens it. On Linux, relevant package names are shown when published.</p>
+      <p class="help-callout">The portable Windows download requires write access to the current application folder and expects WebView2 to be installed. The setup installer is the recommended Windows choice for a normal installation and bare-machine prerequisites. macOS builds are distributed as universal DMGs.</p>
       <h3>Include this information</h3>
       <ul>
         <li>QuarterMaster/M version from the upper-right title bar.</li>

@@ -163,20 +163,15 @@ def runtime_dependencies(exe: Path) -> tuple[list[str], list[Path]]:
 
 
 def verify_installer_payload(runtime_dlls: list[Path]) -> None:
-    wix_source = require_file(RELEASE_DIR / "wix" / "x64" / "main.wxs", "WiX bundle source")
     nsis_source = require_file(
         RELEASE_DIR / "nsis" / "x64" / "installer.nsi", "NSIS bundle source"
     )
-    wix_text = wix_source.read_text(encoding="utf-8")
     nsis_text = nsis_source.read_text(encoding="utf-8")
-    for description, text in (("MSI", wix_text), ("NSIS", nsis_text)):
-        if WEBVIEW2_INSTALLER not in text:
-            fail(f"{description} installer does not embed {WEBVIEW2_INSTALLER}")
-        missing = [dll.name for dll in runtime_dlls if dll.name not in text]
-        if missing:
-            fail(
-                f"{description} installer is missing runtime DLL payloads: {', '.join(missing)}"
-            )
+    if WEBVIEW2_INSTALLER not in nsis_text:
+        fail(f"NSIS setup installer does not embed {WEBVIEW2_INSTALLER}")
+    missing = [dll.name for dll in runtime_dlls if dll.name not in nsis_text]
+    if missing:
+        fail(f"NSIS setup installer is missing runtime DLL payloads: {', '.join(missing)}")
 
 
 def clean_package_dir() -> None:
@@ -226,12 +221,12 @@ Write-Host "Microsoft Edge WebView2 Runtime installed."
     )
 
 
-def write_readme(version: str, nsis_name: str, msi_name: str, exe_name: str) -> None:
+def write_readme(version: str, nsis_name: str, exe_name: str) -> None:
     (PACKAGE_DIR / "README.txt").write_text(
         f"""QuarterMaster-M {version} Windows x64
 
-Recommended: run {nsis_name} or {msi_name}.
-Both installers embed the full x64 Microsoft Edge WebView2 Runtime offline installer. No internet connection is required, and WebView2 is installed silently only when it is missing.
+Recommended: run {nsis_name}.
+The setup installer embeds the full x64 Microsoft Edge WebView2 Runtime offline installer. No internet connection is required, and WebView2 is installed silently only when it is missing.
 
 Portable use: run install-webview2-if-needed.ps1 first if WebView2 may be missing, then run {exe_name}.
 See {DEPENDENCY_REPORT} for the audited native runtime dependencies and {CHECKSUM_FILE} for package hashes.
@@ -248,7 +243,7 @@ def write_dependency_report(imports: list[str], runtime_dlls: list[Path]) -> Non
 
 Embedded installer prerequisite:
   - {WEBVIEW2_INSTALLER}
-    Included inside both MSI and NSIS setup packages and also staged beside the portable EXE.
+    Included inside the NSIS setup package and also staged beside the portable EXE.
 
 Application-local runtime DLLs:
 {bundled}
@@ -277,9 +272,9 @@ def write_checksums() -> None:
     (PACKAGE_DIR / CHECKSUM_FILE).write_text("\n".join(rows) + "\n", encoding="utf-8")
 
 
-def write_current_version(version: str, exe_name: str, msi_name: str) -> None:
+def write_current_version(version: str, exe_name: str, setup_name: str) -> None:
     (ROOT / "current-version").write_text(
-        f"{version}:exe:{exe_name}\n{version}:msi:{msi_name}\n",
+        f"{version}:exe:{exe_name}\n{version}:setup:{setup_name}\n",
         encoding="utf-8",
     )
 
@@ -292,7 +287,6 @@ def main() -> None:
     exe = require_file(RELEASE_DIR / f"{package_name}.exe", "release executable")
     require_windows_gui_subsystem(exe)
     nsis = find_one(RELEASE_DIR / "bundle" / "nsis", f"{product_name}_{version}_x64-setup.exe", "NSIS installer")
-    msi = find_one(RELEASE_DIR / "bundle" / "msi", f"{product_name}_{version}_x64*_en-US.msi", "MSI installer")
     webview2 = find_one(RELEASE_DIR, f"**/{WEBVIEW2_INSTALLER}", "WebView2 offline installer")
     icon = require_file(ROOT / "src-tauri" / "icons" / "favicon.ico", "application icon")
     imports, runtime_dlls = runtime_dependencies(exe)
@@ -303,7 +297,6 @@ def main() -> None:
     copied = [
         (exe, PACKAGE_DIR / portable_name),
         (nsis, PACKAGE_DIR / nsis.name),
-        (msi, PACKAGE_DIR / msi.name),
         (webview2, PACKAGE_DIR / WEBVIEW2_INSTALLER),
         (icon, PACKAGE_DIR / "resources" / "icon.ico"),
     ]
@@ -312,10 +305,10 @@ def main() -> None:
         shutil.copy2(source, destination)
 
     write_webview2_script()
-    write_readme(version, nsis.name, msi.name, portable_name)
+    write_readme(version, nsis.name, portable_name)
     write_dependency_report(imports, runtime_dlls)
     write_checksums()
-    write_current_version(version, portable_name, msi.name)
+    write_current_version(version, portable_name, nsis.name)
 
     print(f"Packaged QuarterMaster-M {version} Windows x64 in {PACKAGE_DIR}")
     for _, destination in copied:
