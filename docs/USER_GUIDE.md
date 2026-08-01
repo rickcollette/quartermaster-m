@@ -80,7 +80,7 @@ The BASIC menu converts between tokenized Atari BASIC and editable listings on e
 - **Keyboard & Mouse** opens the complete shortcut page.
 - **ATASCII Map** opens a searchable representation of all 256 bytes.
 - **Get Help / Report Issue** provides troubleshooting steps and the official issue URL.
-- **Check for Updates** compares the installed semantic version with the repository's published `current-version` manifest. When a newer version exists, choose a portable EXE download beside the running application or download and launch the MSI through Windows Installer.
+- **Check for Updates** compares the installed semantic version with the repository's published `current-version` manifest for the current platform. Windows can download a portable EXE beside the running application or download and launch the MSI through Windows Installer. macOS can download and open the universal DMG. Linux shows the published package names for the current Linux release.
 - **License** displays the complete `LICENSE` file bundled with QuarterMaster/M.
 - **About** displays the application name, exact version, copyright, author, and handle.
 

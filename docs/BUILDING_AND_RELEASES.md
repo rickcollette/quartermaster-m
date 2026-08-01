@@ -4,7 +4,8 @@
 
 ## Supported development environment
 
-The active target is Windows x64.
+The primary development target is Windows x64. Production releases are built for
+Windows x64, universal macOS, and Linux x86_64.
 
 Install:
 
@@ -14,6 +15,28 @@ Install:
 - Microsoft Edge WebView2 Runtime;
 - Python 3 for version/package helper scripts;
 - optional GNU Make if using the Makefile.
+
+For non-interactive macOS laptop builds, prepend the tool locations that are
+installed there:
+
+```sh
+export PATH="/usr/local/bin:$HOME/.cargo/bin:$HOME/.rustup/toolchains/stable-x86_64-apple-darwin/bin:$PATH"
+```
+
+The current Mac build host has Homebrew in `/usr/local/bin`, Node and npm from
+Homebrew, rustup in `/usr/local/bin`, Cargo inside the stable rustup toolchain,
+and Xcode Command Line Tools at
+`/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk`. Add both Darwin Rust
+targets before a universal build:
+
+```sh
+rustup target add x86_64-apple-darwin aarch64-apple-darwin
+```
+
+Linux release packages should be built in Docker. Debian 10 has glibc 2.28, but
+it is too old for the current Tauri/WebKitGTK stack because its GLib packages are
+below the required 2.70 level. Debian 12 is the verified base for this project:
+glibc 2.36, GLib 2.74, libsoup 3, and WebKitGTK/JavascriptCoreGTK 4.1.
 
 ## Install dependencies
 
@@ -176,7 +199,7 @@ Production packaging is intentionally more extensive than development:
 7. audit adjacent runtime DLL dependencies;
 8. verify Windows GUI subsystem;
 9. stage installers, portable EXE, icon, dependency report, and hashes;
-10. generate `current-version` from the staged versioned EXE, MSI, and universal macOS DMG names;
+10. generate `current-version` from the staged platform assets;
 11. push source and the manifest, then publish the matching files as assets on the `vMAJOR.MINOR.PATCH` GitHub release;
 12. smoke-test on a representative clean Windows VM.
 
@@ -192,13 +215,34 @@ Or use the Make target, which bumps BUILD first:
 make build
 ```
 
-Stage and audit the existing production build:
+Stage and audit the existing Windows production build:
 
 ```powershell
 python scripts\package_win64.py
 ```
 
-The package helper expects the NSIS and MSI bundle intermediates to exist. It is not the development EXE staging command.
+The package helper expects the NSIS and MSI bundle intermediates to exist. It is not the development EXE staging command. It writes Windows update entries only; add macOS and Linux entries to `current-version` after those platform packages are staged.
+
+Build the universal macOS package on the Mac build host:
+
+```sh
+export PATH="/usr/local/bin:$HOME/.cargo/bin:$HOME/.rustup/toolchains/stable-x86_64-apple-darwin/bin:$PATH"
+rustup target add x86_64-apple-darwin aarch64-apple-darwin
+npm install
+npm run tauri build -- --target universal-apple-darwin
+```
+
+The expected DMG is:
+
+```text
+src-tauri/target/universal-apple-darwin/release/bundle/dmg/QuarterMaster-M_VERSION_universal.dmg
+```
+
+Build Linux packages in a Debian 12 Docker container with the Tauri Linux build dependencies installed. The expected package outputs are the AppImage, `.deb`, and `.rpm` under:
+
+```text
+src-tauri/target/release/bundle/
+```
 
 ## Application updates
 
@@ -214,9 +258,15 @@ The manifest uses:
 VERSION:exe:PORTABLE_FILENAME.exe
 VERSION:msi:INSTALLER_FILENAME.msi
 VERSION:dmg:MACOS_UNIVERSAL_FILENAME.dmg
+VERSION:appimage:LINUX_APPIMAGE_FILENAME.AppImage
+VERSION:deb:LINUX_DEB_FILENAME.deb
+VERSION:rpm:LINUX_RPM_FILENAME.rpm
 ```
 
-All entries must use the same semantic `MAJOR.MINOR.PATCH` version. The package helper writes the Windows filenames from the actual staged files and includes the expected macOS universal DMG filename.
+Entries are grouped by platform by the native parser. Windows consumes `exe` and
+`msi`, macOS consumes `dmg`, and Linux consumes `appimage`, `deb`, and `rpm`.
+Each platform's entries must agree on their semantic `MAJOR.MINOR.PATCH` version,
+but platform versions can differ during a staggered rollout.
 
 Update assets are downloaded from the matching GitHub release tag:
 
@@ -224,7 +274,12 @@ Update assets are downloaded from the matching GitHub release tag:
 https://github.com/rickcollette/quartermaster-m/releases/download/vVERSION/FILENAME
 ```
 
-Therefore every published manifest must have a corresponding `vVERSION` release containing the platform files it names. The portable EXE is written beside the currently running executable and is not launched automatically. The MSI is downloaded to the user's temporary QuarterMaster/M update folder and launched through Windows Installer. The macOS DMG is downloaded to the same update folder and opened.
+Therefore every published manifest entry must have a corresponding `vVERSION`
+release containing the platform file it names. The portable EXE is written beside
+the currently running executable and is not launched automatically. The MSI is
+downloaded to the user's temporary QuarterMaster/M update folder and launched
+through Windows Installer. The macOS DMG is downloaded to the same update folder
+and opened. Linux package entries are shown only on Linux.
 
 The native updater validates semantic versions and filenames, rejects path components, rechecks the manifest before downloading, uses fixed HTTPS hosts, and refuses to overwrite the running executable.
 

@@ -31,7 +31,7 @@ const invoke=<T=unknown>(command:string,args?:Record<string,unknown>):Promise<T>
 type CellChange = { start: number; end: number };
 type AtrFormatConfig = {
   drive: number;
-  filesystem: "DOS2" | "SPARTA";
+  filesystem: "SPARTA";
   sectors: number;
   sectorSize: 128 | 256;
   volumeLabel: string | null;
@@ -47,7 +47,7 @@ type AtrDocumentLocation = { drive: number; path: string };
 type SelectionBounds = { top:number;left:number;bottom:number;right:number;width:number;height:number };
 type EditorClipboard = { width:number;height:number;cells:Cell[];text:string };
 
-class Editor {
+export class Editor {
   private width = 40;
   private height = DOCUMENT_ROWS;
   private cells: Cell[] = Array.from({ length: this.width * this.height }, blankCell);
@@ -187,20 +187,24 @@ class Editor {
     document.querySelector<HTMLSelectElement>("#mode")!.addEventListener("change", e => { this.mode = (e.target as HTMLSelectElement).value as DocumentMode; this.dirty = true; this.renderStatus(); });
     window.addEventListener("keydown", e => {
       if(this.isBusy){if(e.ctrlKey||e.metaKey)e.preventDefault();return;}
-      const shiftedCommand=(e.ctrlKey||e.metaKey)&&e.shiftKey;
-      if (shiftedCommand && e.key.toLowerCase() === "s") { e.preventDefault(); void this.save(false); }
-      if (shiftedCommand && e.key.toLowerCase() === "o") { e.preventDefault(); void this.openFile(); }
-      if (shiftedCommand && e.key.toLowerCase() === "n") { e.preventDefault(); void this.newFile(); }
-      if (shiftedCommand && e.key.toLowerCase() === "f") { e.preventDefault();this.showFindPanel(false); }
-      if (shiftedCommand && e.key.toLowerCase() === "h") { e.preventDefault();this.showFindPanel(true); }
-      if (shiftedCommand && e.key.toLowerCase() === "a" && this.editorHasFocus()) { e.preventDefault();this.selectAllCells(); }
-      if (shiftedCommand && e.key.toLowerCase() === "c" && this.editorHasFocus()) { e.preventDefault();void this.copySelectionToSystem(false); }
-      if (shiftedCommand && e.key.toLowerCase() === "x" && this.editorHasFocus()) { e.preventDefault();void this.copySelectionToSystem(true); }
-      if (shiftedCommand && e.key.toLowerCase() === "v" && this.editorHasFocus()) { e.preventDefault();void this.pasteFromSystemClipboard(); }
+      const command=e.ctrlKey||e.metaKey,key=e.key.toLowerCase();
+      if(command&&key==="s"){e.preventDefault();void this.save(e.shiftKey);}
+      if(command&&!e.shiftKey&&key==="o"){e.preventDefault();void this.openFile();}
+      if(command&&!e.shiftKey&&key==="n"){e.preventDefault();void this.newFile();}
+      if(command&&!e.shiftKey&&key==="f"){e.preventDefault();this.showFindPanel(false);}
+      if(command&&e.shiftKey&&key==="h"){e.preventDefault();this.showFindPanel(true);}
+      if(command&&!e.shiftKey&&key==="a"&&this.editorHasFocus()){e.preventDefault();this.selectAllCells();}
+      if(command&&!e.shiftKey&&key==="c"&&this.editorHasFocus()){e.preventDefault();void this.copySelectionToSystem(false);}
+      if(command&&!e.shiftKey&&key==="x"&&this.editorHasFocus()){e.preventDefault();void this.copySelectionToSystem(true);}
+      if(command&&!e.shiftKey&&key==="v"&&this.editorHasFocus()){e.preventDefault();void this.pasteFromSystemClipboard();}
       if (e.key === "F2") { e.preventDefault(); this.inverse = !this.inverse; this.renderStatus(); }
     });
     this.render();this.renderAtrTree();void this.installHostDropHandler();this.hiddenInput.focus();
-    await new Promise<void>(resolve=>requestAnimationFrame(()=>requestAnimationFrame(()=>resolve())));
+
+    // A hidden WKWebView may not receive animation frames on macOS. Revealing
+    // the window must happen before waiting for a paint or startup deadlocks:
+    // the paint waits for a visible window while the visible window waits for
+    // the paint.
     try{await tauriInvoke("app_ready");}catch(error){console.error("Could not finish the splash-screen transition:",error);}
 
     // Restoring a large local tree or an ATR image can take time (and persisted
@@ -954,16 +958,11 @@ class Editor {
   private deleteCurrentLine():void{
     const row=Math.floor(this.cursor/this.width),column=this.cursor%this.width,start=row*this.width;
     this.clearEditorSelection();
-    this.cellElements[this.cursor]?.classList.remove("cursor");
-    this.cells.splice(start,this.width);
-    this.cells.push(...Array.from({length:this.width},blankCell));
-    const recycled=this.cellElements.splice(start,this.width);
-    this.cellElements.push(...recycled);
-    const recycledRow=this.rowElements.splice(row,1)[0];
-    if(recycledRow){this.rowElements.push(recycledRow);this.screen.appendChild(recycledRow);}
+    for(let index=start;index<this.cellCount-this.width;index++)this.cells[index]=this.cells[index+this.width];
+    for(let index=this.cellCount-this.width;index<this.cellCount;index++)this.cells[index]=blankCell();
     this.cursor=Math.min(this.cellCount-1,row*this.width+column);
     this.selectionAnchor=this.cursor;this.selectionFocus=this.cursor;
-    this.dirty=true;this.updateCellRange(this.cellCount-this.width,this.cellCount);this.updateCell(this.cursor);this.renderStatus();
+    this.dirty=true;this.updateCellRange(start,this.cellCount);this.renderStatus();
   }
 
   private async command(cmd:string):Promise<void>{
@@ -995,9 +994,19 @@ class Editor {
     this.cells=Array.from({length:this.cellCount},blankCell);this.cursor=0;this.selectionActive=false;this.selectionAnchor=0;this.selectionFocus=0;this.dirty=true;this.render();
   }
 
-  private request(path=""):SaveDocumentRequest{return{path,mode:this.mode,width:this.width,height:this.height,cells:this.cells,trimTrailingSpaces:true};}
-  private basicRequest(path=""):SaveDocumentRequest{return{path,mode:"ascii",width:this.width,height:this.height,cells:this.cells,trimTrailingSpaces:true};}
-  private listingRequest(path:string, mode:DocumentMode):SaveDocumentRequest{return{path,mode,width:this.width,height:this.height,cells:this.cells,trimTrailingSpaces:true};}
+  private saveHeight():number{
+    for(let row=this.height-1;row>=0;row--){
+      const start=row*this.width,end=start+this.width;
+      for(let index=start;index<end;index++){
+        const cell=this.cells[index]??blankCell();
+        if(cell.inverse||cell.byte!==0x20)return row+1;
+      }
+    }
+    return 0;
+  }
+  private request(path=""):SaveDocumentRequest{const height=this.saveHeight();return{path,mode:this.mode,width:this.width,height,cells:this.cells.slice(0,this.width*height),trimTrailingSpaces:true};}
+  private basicRequest(path=""):SaveDocumentRequest{const height=this.saveHeight();return{path,mode:"ascii",width:this.width,height,cells:this.cells.slice(0,this.width*height),trimTrailingSpaces:true};}
+  private listingRequest(path:string, mode:DocumentMode):SaveDocumentRequest{const height=this.saveHeight();return{path,mode,width:this.width,height,cells:this.cells.slice(0,this.width*height),trimTrailingSpaces:true};}
   private chooseListingMode(defaultMode:DocumentMode):DocumentMode|null{const answer=(prompt("Listing format: ATASCII or ASCII",defaultMode.toUpperCase())??"").trim().toLowerCase();if(!answer)return null;return answer.startsWith("at")?"atascii":"ascii";}
   private load(loaded:LoadedDocument,label?:string,atrDocument:AtrDocumentLocation|null=null):void{this.width=loaded.width===80?80:40;this.height=loaded.height;this.cells=loaded.cells;while(this.cells.length<this.cellCount)this.cells.push(blankCell());this.atrDocument=atrDocument;this.path=atrDocument?null:loaded.path;this.mode=loaded.mode;document.querySelector<HTMLSelectElement>("#mode")!.value=this.mode;this.cursor=0;this.selectionActive=false;this.selectionAnchor=0;this.selectionFocus=0;this.dirty=false;this.render();if(label)document.querySelector("#fileName")!.textContent=label;if(loaded.warnings.length)window.alert(loaded.warnings.join("\n"));}
 
@@ -1015,15 +1024,36 @@ class Editor {
     const p=await open({title:"Open From Local Folder",multiple:false,defaultPath:location.directory||undefined});if(!p)return;
     try{this.activeLocationKind="local";this.selectedLocalPath=p;this.load(await invoke("load_document",{path:p,mode:this.mode,width:this.width,height:this.height}));await this.setLocalFolderForPath(p);}catch(e){window.alert(String(e));}
   }
-  private async save(_force:boolean):Promise<void>{
-    const location=this.activeStorageLocation(),defaultName=this.currentDocumentName();
+  private async save(force:boolean):Promise<void>{
+    if(!force&&this.atrDocument){
+      const location=this.atrDocument;
+      if(!this.atr.drives.find(status=>status.drive===`D${location.drive}:`)?.mounted){window.alert(`The document's ATR is no longer mounted in D${location.drive}:`);return;}
+      try{
+        this.activeLocationKind="atr";this.selectedAtrDrive=location.drive;this.selectedAtrPath=location.path;
+        this.setAtr(await invoke("atr_write_document",{imageName:location.path,request:this.request(),drive:location.drive,overwrite:true}));
+        this.verifyAtrSave(location.drive,location.path);
+        this.dirty=false;this.renderStatus();
+        this.showAtrSaveConfirmation(location.drive,location.path);
+      }catch(e){window.alert(String(e));}
+      return;
+    }
+    if(!force&&this.path){
+      try{await invoke("save_document",{request:this.request(this.path)});this.dirty=false;this.renderStatus();}catch(e){window.alert(String(e));}
+      return;
+    }
+    const location:ActiveStorageLocation=force&&this.atrDocument
+      ?{kind:"atr",drive:this.atrDocument.drive,directory:this.parentAtrPath(this.atrDocument.path)}
+      :this.activeStorageLocation();
+    const defaultName=this.currentDocumentName();
     if(location.kind==="atr"){
       if(!this.atr.drives.find(status=>status.drive===`D${location.drive}:`)?.mounted){window.alert(`Mount an ATR image in D${location.drive}: first.`);return;}
       const imagePath=await this.showAtrDocumentDialog("save",location,defaultName);if(!imagePath)return;
       try{
-        this.selectedAtrDrive=location.drive;this.selectedAtrPath=imagePath;
+        this.activeLocationKind="atr";this.selectedAtrDrive=location.drive;this.selectedAtrPath=imagePath;
         this.setAtr(await invoke("atr_write_document",{imageName:imagePath,request:this.request(),drive:location.drive,overwrite:true}));
+        this.verifyAtrSave(location.drive,imagePath);
         this.path=null;this.atrDocument={drive:location.drive,path:imagePath};this.dirty=false;this.renderStatus();
+        this.showAtrSaveConfirmation(location.drive,imagePath);
       }catch(e){window.alert(String(e));}
       return;
     }
@@ -1035,6 +1065,14 @@ class Editor {
     if(!directory)return tree;
     const entry=this.findAtrTreeEntry(tree,directory);
     return entry?.isDirectory?entry.children:[];
+  }
+  private verifyAtrSave(drive:number,imagePath:string):void{
+    const tree=this.atr.drives.find(status=>status.drive===`D${drive}:`)?.tree??[];
+    if(!this.findAtrTreeEntry(tree,imagePath))throw new Error(`Save returned without ${imagePath} appearing in D${drive}:.`);
+  }
+  private showAtrSaveConfirmation(drive:number,imagePath:string):void{
+    const mounted=this.atr.drives.find(status=>status.drive===`D${drive}:`);
+    window.alert(`Saved D${drive}:${imagePath}\n\nATR image:\n${mounted?.path??"(unknown path)"}`);
   }
   private validAtrFilename(value:string):string|null{
     const filename=value.trim().toUpperCase();
@@ -1115,30 +1153,29 @@ class Editor {
             <fieldset>
               <legend>Filesystem</legend>
               <div class="format-radio-grid">
-                <label class="format-radio"><input type="radio" name="filesystem" value="DOS2" checked><span><strong>Atari DOS 2</strong><small>Classic flat 8.3 directory</small></span></label>
-                <label class="format-radio"><input type="radio" name="filesystem" value="SPARTA"><span><strong>SpartaDOS 2.x / SDX</strong><small>Volume label and subdirectories</small></span></label>
+                <label class="format-radio"><input type="radio" name="filesystem" value="SPARTA" checked><span><strong>SpartaDOS 2.x / SDX</strong><small>Volume label and subdirectories</small></span></label>
               </div>
             </fieldset>
             <fieldset>
               <legend>Disk geometry</legend>
               <div class="format-radio-grid geometry">
-                <label class="format-radio"><input type="radio" name="geometry" value="90K" checked><span><strong>90K</strong><small>720 × 128 · Single density</small></span></label>
+                <label class="format-radio"><input type="radio" name="geometry" value="90K"><span><strong>90K</strong><small>720 × 128 · Single density</small></span></label>
                 <label class="format-radio"><input type="radio" name="geometry" value="130K"><span><strong>130K</strong><small>1040 × 128 · Enhanced</small></span></label>
                 <label class="format-radio"><input type="radio" name="geometry" value="180K"><span><strong>180K</strong><small>720 × 256 · Double density</small></span></label>
-                <label class="format-radio"><input type="radio" name="geometry" value="360K"><span><strong>360K</strong><small>1440 × 256 · DD, double-sided</small></span></label>
+                <label class="format-radio"><input type="radio" name="geometry" value="360K" checked><span><strong>360K</strong><small>1440 × 256 · DD, double-sided</small></span></label>
                 <label class="format-radio"><input type="radio" name="geometry" value="16M"><span><strong>16M</strong><small>65,535 × 256 · Large partition</small></span></label>
                 <label class="format-radio"><input type="radio" name="geometry" value="CUSTOM"><span><strong>Custom</strong><small>Choose sectors and bytes</small></span></label>
               </div>
               <div class="custom-geometry" hidden>
-                <label>Sector count<input name="customSectors" type="number" min="368" max="1040" step="1" value="720" disabled></label>
+                <label>Sector count<input name="customSectors" type="number" min="16" max="65535" step="1" value="1440" disabled></label>
                 <label>Bytes / sector<select name="customSectorSize" disabled><option value="128">128</option><option value="256">256</option></select></label>
               </div>
-              <small class="format-hint">360K and 16M use SpartaDOS. Double-density ATR images retain 128-byte boot sectors 1–3.</small>
+              <small class="format-hint">All new ATRs use SpartaDOS. Double-density ATR images retain 128-byte boot sectors 1–3.</small>
             </fieldset>
             <fieldset>
               <legend>SpartaDOS volume</legend>
-              <label class="volume-field">Volume label<input name="volumeLabel" type="text" maxlength="8" value="NEWDISK" autocomplete="off" spellcheck="false" disabled></label>
-              <small class="format-hint">Up to 8 characters. Available when SpartaDOS is selected.</small>
+              <label class="volume-field">Volume label<input name="volumeLabel" type="text" maxlength="8" value="NEWDISK" autocomplete="off" spellcheck="false"></label>
+              <small class="format-hint">Up to 8 characters.</small>
             </fieldset>
           </div>
           <div class="format-validation" role="status"></div>
@@ -1152,37 +1189,32 @@ class Editor {
       const volumeLabel=form.elements.namedItem("volumeLabel") as HTMLInputElement;
       const validation=form.querySelector<HTMLElement>(".format-validation")!;
       const createButton=form.querySelector<HTMLButtonElement>("[data-format-create]")!;
-      const dos2Option=form.querySelector<HTMLInputElement>('input[name="filesystem"][value="DOS2"]')!;
-      const spartaOption=form.querySelector<HTMLInputElement>('input[name="filesystem"][value="SPARTA"]')!;
-      const presetGeometry:Record<string,{sectors:number;sectorSize:128|256;requiresSparta?:boolean}>={
+      const presetGeometry:Record<string,{sectors:number;sectorSize:128|256}>={
         "90K":{sectors:720,sectorSize:128},
         "130K":{sectors:1040,sectorSize:128},
         "180K":{sectors:720,sectorSize:256},
-        "360K":{sectors:1440,sectorSize:256,requiresSparta:true},
-        "16M":{sectors:65535,sectorSize:256,requiresSparta:true}
+        "360K":{sectors:1440,sectorSize:256},
+        "16M":{sectors:65535,sectorSize:256}
       };
-      let current:{drive:number;filesystem:"DOS2"|"SPARTA";sectors:number;sectorSize:128|256}|null=null;
+      let current:{drive:number;filesystem:"SPARTA";sectors:number;sectorSize:128|256}|null=null;
       const radioValue=(name:string)=>new FormData(form).get(name)?.toString()??"";
       const update=()=>{
         const drive=Number(radioValue("drive"))||this.selectedAtrDrive;
         const geometry=radioValue("geometry");
         const preset=presetGeometry[geometry];
-        dos2Option.disabled=preset?.requiresSparta??false;
-        if(preset?.requiresSparta)spartaOption.checked=true;
-        const filesystem=radioValue("filesystem")==="SPARTA"?"SPARTA":"DOS2";
+        const filesystem:"SPARTA"="SPARTA";
         const isCustom=geometry==="CUSTOM";
         customGeometry.hidden=!isCustom;
         customSectors.disabled=!isCustom;customSectorSize.disabled=!isCustom;
-        volumeLabel.disabled=filesystem!=="SPARTA";
         const sectors=preset?.sectors??Number(customSectors.value);
         const sectorSize=preset?.sectorSize??(Number(customSectorSize.value)===256?256:128);
-        const minimum=filesystem==="SPARTA"?16:368,maximum=filesystem==="SPARTA"?65535:1040;
+        const minimum=16,maximum=65535;
         customSectors.min=String(minimum);customSectors.max=String(maximum);
         const sectorError=isCustom&&(!Number.isInteger(sectors)||sectors<minimum||sectors>maximum)
-          ? `${filesystem==="SPARTA"?"SpartaDOS":"Atari DOS 2"} requires ${minimum.toLocaleString()}–${maximum.toLocaleString()} sectors.`
+          ? `SpartaDOS requires ${minimum.toLocaleString()}–${maximum.toLocaleString()} sectors.`
           :"";
         const label=volumeLabel.value.trim();
-        const volumeError=filesystem==="SPARTA"&&!/^[A-Za-z0-9][A-Za-z0-9 _-]{0,7}$/.test(label)
+        const volumeError=!/^[A-Za-z0-9][A-Za-z0-9 _-]{0,7}$/.test(label)
           ?"Use 1–8 letters, numbers, spaces, _ or -, beginning with a letter or number."
           :"";
         validation.textContent=sectorError||volumeError;
@@ -1202,7 +1234,7 @@ class Editor {
       form.addEventListener("submit",event=>{
         event.preventDefault();update();
         if(createButton.disabled||!current)return;
-        finish({drive:current.drive,filesystem:current.filesystem,sectors:current.sectors,sectorSize:current.sectorSize,volumeLabel:current.filesystem==="SPARTA"?volumeLabel.value.trim().toUpperCase():null});
+        finish({drive:current.drive,filesystem:current.filesystem,sectors:current.sectors,sectorSize:current.sectorSize,volumeLabel:volumeLabel.value.trim().toUpperCase()});
       });
       form.querySelector("[data-format-cancel]")!.addEventListener("click",()=>finish(null));
       document.addEventListener("keydown",onKeyDown);
@@ -1211,7 +1243,14 @@ class Editor {
     });
   }
   private async atrMount():Promise<void>{const p=await open({multiple:false,filters:[{name:"Atari ATR",extensions:["atr"]}]});if(!p)return;try{this.activeLocationKind="atr";this.selectedAtrPath=null;this.setAtr(await invoke("atr_mount",{path:p,drive:this.selectedAtrDrive}));this.showAtrDirectory();}catch(e){window.alert(String(e));}}
-  private async atrWriteDocument():Promise<void>{if(!this.requireAtr())return;const n=prompt(`Filename inside D${this.selectedAtrDrive}:`,this.defaultAtrPath(this.mode==="atascii"?"UNTITLED.ATA":"UNTITLED.TXT"));if(!n)return;this.setAtr(await invoke("atr_write_document",{imageName:n,request:this.request(),drive:this.selectedAtrDrive}));this.showAtrDirectory();}
+  private async atrWriteDocument():Promise<void>{
+    if(!this.requireAtr())return;
+    const n=prompt(`Filename inside D${this.selectedAtrDrive}:`,this.defaultAtrPath(this.mode==="atascii"?"UNTITLED.ATA":"UNTITLED.TXT"));if(!n)return;
+    try{
+      this.setAtr(await invoke("atr_write_document",{imageName:n,request:this.request(),drive:this.selectedAtrDrive,overwrite:true}));
+      this.path=null;this.atrDocument={drive:this.selectedAtrDrive,path:n};this.selectedAtrPath=n;this.dirty=false;this.renderStatus();this.showAtrDirectory();
+    }catch(e){window.alert(String(e));}
+  }
   private async atrOpenDocument():Promise<void>{this.activeLocationKind="atr";this.renderAtrTree();await this.openFile();}
   private async atrAddHost():Promise<void>{if(!this.requireAtr())return;const p=await open({multiple:false});if(!p)return;const n=prompt("Destination filename",this.defaultAtrPath((p.split(/[\\/]/).pop()??"FILE").toUpperCase()));if(!n)return;this.setAtr(await invoke("atr_add_host_file",{hostPath:p,imageName:n,drive:this.selectedAtrDrive}));this.showAtrDirectory();}
   private async atrExtract():Promise<void>{if(!this.requireAtr())return;const n=prompt(`Filename inside D${this.selectedAtrDrive}:`);if(!n)return;const p=await save({defaultPath:n});if(!p)return;this.setAtr(await invoke("atr_extract_file",{imageName:n,hostPath:p,drive:this.selectedAtrDrive}));}
@@ -1255,13 +1294,15 @@ class Editor {
       else if(info.state==="newer")status.textContent="This build is newer than the currently published release.";
       else{
         status.textContent=`QuarterMaster/M ${info.latestVersion} is available.`;
-        files.hidden=false;files.textContent=`Portable: ${info.exeFile} · Installer: ${info.msiFile}`;
+        files.hidden=false;
         if(info.platform==="macos"&&info.dmgFile){
           files.textContent=`macOS DMG: ${info.dmgFile}`;
           dmgButton.hidden=false;
         }else if(info.platform==="windows"&&info.exeFile&&info.msiFile){
           files.textContent=`Portable: ${info.exeFile} · Installer: ${info.msiFile}`;
           exeButton.hidden=false;msiButton.hidden=false;
+        }else if(info.platform==="linux"&&info.linuxFiles.length){
+          files.textContent=`Linux package${info.linuxFiles.length===1?"":"s"}: ${info.linuxFiles.join(" · ")}`;
         }else{
           files.textContent="No automatic update package is available for this platform.";
         }
@@ -1297,8 +1338,10 @@ class Editor {
   private showHelp(section="start"):void{showHelpCenter(section,APP_VERSION);}
 }
 
-void new Editor().mount().catch(async error=>{
-  console.error(error);
-  try{await tauriInvoke("app_ready");}catch{}
-  window.setTimeout(()=>window.alert(`QuarterMaster could not finish starting:\n${String(error)}`),0);
-});
+if(import.meta.env.MODE!=="test"){
+  void new Editor().mount().catch(async error=>{
+    console.error(error);
+    try{await tauriInvoke("app_ready");}catch{}
+    window.setTimeout(()=>window.alert(`QuarterMaster could not finish starting:\n${String(error)}`),0);
+  });
+}

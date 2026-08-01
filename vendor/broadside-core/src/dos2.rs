@@ -221,13 +221,18 @@ impl<'a> Dos2<'a> {
         }
         Ok(out)
     }
-    fn find_free_slot(&mut self) -> Result<(u32, usize, u8)> {
+    fn find_free_slot(&mut self) -> Result<(u32, usize, u8, bool)> {
         for ds in 0..DIR_SECTORS {
             let d = self.image.read_sector(DIR_START + ds)?;
             for slot in 0..8usize {
                 let status = d[slot * 16];
                 if status == 0 || status == 0x80 {
-                    return Ok((DIR_START + ds, slot, (ds * 8 + slot as u32) as u8));
+                    return Ok((
+                        DIR_START + ds,
+                        slot,
+                        (ds * 8 + slot as u32) as u8,
+                        status == 0,
+                    ));
                 }
             }
         }
@@ -252,7 +257,7 @@ impl<'a> Dos2<'a> {
         if (self.free_sectors()? as usize) < needed {
             return Err(BroadsideError::NoSpace);
         }
-        let (dir_sector, slot, id) = self.find_free_slot()?;
+        let (dir_sector, slot, id, replaced_end_marker) = self.find_free_slot()?;
         let mut allocated = Vec::with_capacity(needed);
         for _ in 0..needed {
             let s = self.find_free_sector()?;
@@ -279,6 +284,18 @@ impl<'a> Dos2<'a> {
         dir[o + 3..o + 5].copy_from_slice(&(allocated[0] as u16).to_le_bytes());
         dir[o + 5..o + 16].copy_from_slice(&encoded);
         self.image.write_sector(dir_sector, &dir)?;
+        if replaced_end_marker && id < (DIR_SECTORS * 8 - 1) as u8 {
+            // A zero status byte terminates a DOS 2 directory. Old disks often
+            // retain arbitrary bytes in the unused slots after that marker.
+            // When appending into the marker slot, advance it explicitly so
+            // stale bytes are never exposed as phantom directory entries.
+            let next_id = id + 1;
+            let next_sector = DIR_START + next_id as u32 / 8;
+            let next_slot = next_id as usize % 8;
+            let mut next_dir = self.image.read_sector(next_sector)?;
+            next_dir[next_slot * 16] = 0;
+            self.image.write_sector(next_sector, &next_dir)?;
+        }
         self.image.flush()
     }
     pub fn rename(&mut self, name: &str, new_name: &str) -> Result<()> {

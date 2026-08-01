@@ -18,10 +18,18 @@ type Result<T> = std::result::Result<T, String>;
 
 #[derive(Clone, Debug, PartialEq)]
 struct Manifest {
+    windows: Option<PlatformManifest>,
+    macos: Option<PlatformManifest>,
+    linux: Option<PlatformManifest>,
+}
+
+#[derive(Clone, Debug, Default, PartialEq)]
+struct PlatformManifest {
     version: String,
     exe_file: Option<String>,
     msi_file: Option<String>,
     dmg_file: Option<String>,
+    linux_files: Vec<String>,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -34,6 +42,7 @@ pub struct UpdateInfo {
     exe_file: Option<String>,
     msi_file: Option<String>,
     dmg_file: Option<String>,
+    linux_files: Vec<String>,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -80,11 +89,40 @@ fn validate_asset_name(value: &str, extension: &str) -> Result<()> {
     Ok(())
 }
 
+fn validate_linux_asset_name(value: &str) -> Result<()> {
+    if [".appimage", ".deb", ".rpm", ".tar.gz", ".tgz"]
+        .iter()
+        .any(|extension| validate_asset_name(value, extension).is_ok())
+    {
+        Ok(())
+    } else {
+        Err(format!("invalid Linux update filename {value:?}"))
+    }
+}
+
+fn platform_entry_mut<'a>(
+    slot: &'a mut Option<PlatformManifest>,
+    version: &str,
+    platform: &str,
+) -> Result<&'a mut PlatformManifest> {
+    let entry = slot.get_or_insert_with(|| PlatformManifest {
+        version: version.to_string(),
+        ..PlatformManifest::default()
+    });
+    if entry.version != version {
+        return Err(format!(
+            "current-version {platform} entries do not use the same version"
+        ));
+    }
+    Ok(entry)
+}
+
 fn parse_manifest(text: &str) -> Result<Manifest> {
-    let mut version: Option<String> = None;
-    let mut exe_file: Option<String> = None;
-    let mut msi_file: Option<String> = None;
-    let mut dmg_file: Option<String> = None;
+    let mut manifest = Manifest {
+        windows: None,
+        macos: None,
+        linux: None,
+    };
     for (index, raw_line) in text.lines().enumerate() {
         let line = raw_line.trim();
         if line.is_empty() || line.starts_with('#') {
@@ -98,44 +136,43 @@ fn parse_manifest(text: &str) -> Result<Manifest> {
             return Err(format!("invalid current-version line {}", index + 1));
         }
         parse_version(line_version)?;
-        if let Some(expected) = &version {
-            if expected != line_version {
-                return Err("current-version entries do not use the same version".into());
-            }
-        } else {
-            version = Some(line_version.to_string());
-        }
         match kind {
             "exe" => {
                 validate_asset_name(filename, ".exe")?;
-                if exe_file.replace(filename.to_string()).is_some() {
+                let entry = platform_entry_mut(&mut manifest.windows, line_version, "Windows")?;
+                if entry.exe_file.replace(filename.to_string()).is_some() {
                     return Err("current-version contains more than one exe entry".into());
                 }
             }
             "msi" => {
                 validate_asset_name(filename, ".msi")?;
-                if msi_file.replace(filename.to_string()).is_some() {
+                let entry = platform_entry_mut(&mut manifest.windows, line_version, "Windows")?;
+                if entry.msi_file.replace(filename.to_string()).is_some() {
                     return Err("current-version contains more than one msi entry".into());
                 }
             }
             "dmg" => {
                 validate_asset_name(filename, ".dmg")?;
-                if dmg_file.replace(filename.to_string()).is_some() {
+                let entry = platform_entry_mut(&mut manifest.macos, line_version, "macOS")?;
+                if entry.dmg_file.replace(filename.to_string()).is_some() {
                     return Err("current-version contains more than one dmg entry".into());
                 }
+            }
+            "appimage" | "deb" | "rpm" | "tar.gz" | "tgz" | "linux" => {
+                validate_linux_asset_name(filename)?;
+                let entry = platform_entry_mut(&mut manifest.linux, line_version, "Linux")?;
+                if entry.linux_files.iter().any(|asset| asset == filename) {
+                    return Err("current-version contains duplicate Linux entry".into());
+                }
+                entry.linux_files.push(filename.to_string());
             }
             _ => return Err(format!("unsupported current-version asset type {kind:?}")),
         }
     }
-    if exe_file.is_none() && msi_file.is_none() && dmg_file.is_none() {
+    if manifest.windows.is_none() && manifest.macos.is_none() && manifest.linux.is_none() {
         return Err("current-version has no update assets".into());
     }
-    Ok(Manifest {
-        version: version.ok_or_else(|| "current-version is empty".to_string())?,
-        exe_file,
-        msi_file,
-        dmg_file,
-    })
+    Ok(manifest)
 }
 
 fn http_client(timeout: Duration) -> Result<reqwest::blocking::Client> {
@@ -174,16 +211,45 @@ fn update_state(latest: &str) -> Result<&'static str> {
     )
 }
 
-fn update_info(manifest: Manifest) -> Result<UpdateInfo> {
+fn manifest_for_platform<'a>(
+    manifest: &'a Manifest,
+    platform: &str,
+) -> Option<&'a PlatformManifest> {
+    match platform {
+        "windows" => manifest.windows.as_ref(),
+        "macos" => manifest.macos.as_ref(),
+        "linux" => manifest.linux.as_ref(),
+        _ => None,
+    }
+}
+
+fn require_manifest_for_platform(manifest: &Manifest, platform: &str) -> Result<PlatformManifest> {
+    manifest_for_platform(manifest, platform)
+        .cloned()
+        .ok_or_else(|| format!("current-version has no {platform} update entry"))
+}
+
+fn update_info_for(manifest: Manifest, platform: &str) -> Result<UpdateInfo> {
+    let platform_manifest = manifest_for_platform(&manifest, platform);
+    let latest_version = platform_manifest
+        .map(|entry| entry.version.clone())
+        .unwrap_or_else(|| APP_VERSION.into());
     Ok(UpdateInfo {
         current_version: APP_VERSION.into(),
-        latest_version: manifest.version.clone(),
-        state: update_state(&manifest.version)?.into(),
-        platform: current_platform().into(),
-        exe_file: manifest.exe_file,
-        msi_file: manifest.msi_file,
-        dmg_file: manifest.dmg_file,
+        latest_version: latest_version.clone(),
+        state: update_state(&latest_version)?.into(),
+        platform: platform.into(),
+        exe_file: platform_manifest.and_then(|entry| entry.exe_file.clone()),
+        msi_file: platform_manifest.and_then(|entry| entry.msi_file.clone()),
+        dmg_file: platform_manifest.and_then(|entry| entry.dmg_file.clone()),
+        linux_files: platform_manifest
+            .map(|entry| entry.linux_files.clone())
+            .unwrap_or_default(),
     })
+}
+
+fn update_info(manifest: Manifest) -> Result<UpdateInfo> {
+    update_info_for(manifest, current_platform())
 }
 
 fn current_platform() -> &'static str {
@@ -191,6 +257,8 @@ fn current_platform() -> &'static str {
         "windows"
     } else if cfg!(target_os = "macos") {
         "macos"
+    } else if cfg!(target_os = "linux") {
+        "linux"
     } else {
         "other"
     }
@@ -257,19 +325,23 @@ fn download_file(url: &str, destination: &Path) -> Result<()> {
     result
 }
 
-fn require_newer_manifest() -> Result<Manifest> {
+fn require_newer_manifest_for(platform: &str) -> Result<PlatformManifest> {
     let manifest = fetch_manifest()?;
-    if update_state(&manifest.version)? != "available" {
+    let platform_manifest = require_manifest_for_platform(&manifest, platform)?;
+    if update_state(&platform_manifest.version)? != "available" {
         return Err(format!(
             "QuarterMaster/M {APP_VERSION} is already current (published version {}).",
-            manifest.version
+            platform_manifest.version
         ));
     }
-    Ok(manifest)
+    Ok(platform_manifest)
 }
 
 fn download_portable() -> Result<UpdateDownload> {
-    let manifest = require_newer_manifest()?;
+    if !cfg!(target_os = "windows") {
+        return Err("Windows portable updates are only supported on Windows".into());
+    }
+    let manifest = require_newer_manifest_for("windows")?;
     let current = std::env::current_exe()
         .map_err(|error| format!("cannot locate the running executable: {error}"))?;
     let directory = current
@@ -291,7 +363,10 @@ fn download_portable() -> Result<UpdateDownload> {
 }
 
 fn download_installer() -> Result<UpdateDownload> {
-    let manifest = require_newer_manifest()?;
+    if !cfg!(target_os = "windows") {
+        return Err("Windows installer updates are only supported on Windows".into());
+    }
+    let manifest = require_newer_manifest_for("windows")?;
     let msi_file = manifest
         .msi_file
         .ok_or_else(|| "current-version has no Windows MSI entry".to_string())?;
@@ -311,21 +386,20 @@ fn download_installer() -> Result<UpdateDownload> {
 }
 
 fn download_macos_dmg() -> Result<UpdateDownload> {
-    let manifest = require_newer_manifest()?;
+    if !cfg!(target_os = "macos") {
+        return Err("macOS updates are only supported on macOS".into());
+    }
+    let manifest = require_newer_manifest_for("macos")?;
     let dmg_file = manifest
         .dmg_file
         .ok_or_else(|| "current-version has no macOS DMG entry".to_string())?;
     let directory = std::env::temp_dir().join("QuarterMaster-M").join("updates");
     let destination = directory.join(&dmg_file);
     download_file(&release_url(&manifest.version, &dmg_file), &destination)?;
-    if cfg!(target_os = "macos") {
-        Command::new("open")
-            .arg(&destination)
-            .spawn()
-            .map_err(|error| format!("cannot open macOS disk image: {error}"))?;
-    } else {
-        return Err("macOS updates are only supported on macOS".into());
-    }
+    Command::new("open")
+        .arg(&destination)
+        .spawn()
+        .map_err(|error| format!("cannot open macOS disk image: {error}"))?;
     Ok(UpdateDownload {
         version: manifest.version,
         path: destination.to_string_lossy().into_owned(),
@@ -373,27 +447,83 @@ mod tests {
         )
         .unwrap();
         assert_eq!(
-            manifest,
-            Manifest {
+            manifest.windows,
+            Some(PlatformManifest {
                 version: "1.2.3".into(),
                 exe_file: Some("quartermaster-m-1.2.3.exe".into()),
                 msi_file: Some("QuarterMaster-M_1.2.3_x64_en-US.msi".into()),
                 dmg_file: None,
-            }
+                linux_files: vec![],
+            })
+        );
+        assert_eq!(manifest.macos, None);
+        assert_eq!(manifest.linux, None);
+    }
+
+    #[test]
+    fn parses_platform_specific_manifest_entries() {
+        let manifest = parse_manifest(
+            "1.2.3:exe:quartermaster-m-1.2.3.exe\n\
+             1.2.3:msi:QuarterMaster-M_1.2.3_x64_en-US.msi\n\
+             1.2.4:dmg:QuarterMaster-M_1.2.4_universal.dmg\n\
+             1.2.5:appimage:QuarterMaster-M_1.2.5_x86_64.AppImage\n\
+             1.2.5:deb:quartermaster-m_1.2.5_amd64.deb\n",
+        )
+        .unwrap();
+        assert_eq!(
+            manifest.macos.and_then(|entry| entry.dmg_file),
+            Some("QuarterMaster-M_1.2.4_universal.dmg".into())
+        );
+        assert_eq!(
+            manifest
+                .linux
+                .map(|entry| (entry.version, entry.linux_files)),
+            Some((
+                "1.2.5".into(),
+                vec![
+                    "QuarterMaster-M_1.2.5_x86_64.AppImage".into(),
+                    "quartermaster-m_1.2.5_amd64.deb".into()
+                ]
+            ))
         );
     }
 
     #[test]
-    fn parses_macos_manifest_entry() {
+    fn update_info_only_exposes_relevant_platform_assets() {
         let manifest = parse_manifest(
             "1.2.3:exe:quartermaster-m-1.2.3.exe\n\
              1.2.3:msi:QuarterMaster-M_1.2.3_x64_en-US.msi\n\
-             1.2.3:dmg:QuarterMaster-M_1.2.3_universal.dmg\n",
+             1.2.4:dmg:QuarterMaster-M_1.2.4_universal.dmg\n\
+             1.2.5:appimage:QuarterMaster-M_1.2.5_x86_64.AppImage\n",
         )
         .unwrap();
+
+        let macos = update_info_for(manifest.clone(), "macos").unwrap();
+        assert_eq!(macos.latest_version, "1.2.4");
+        assert_eq!(macos.exe_file, None);
+        assert_eq!(macos.msi_file, None);
         assert_eq!(
-            manifest.dmg_file,
-            Some("QuarterMaster-M_1.2.3_universal.dmg".into())
+            macos.dmg_file,
+            Some("QuarterMaster-M_1.2.4_universal.dmg".into())
+        );
+        assert!(macos.linux_files.is_empty());
+
+        let windows = update_info_for(manifest.clone(), "windows").unwrap();
+        assert_eq!(windows.latest_version, "1.2.3");
+        assert_eq!(windows.dmg_file, None);
+        assert!(windows.linux_files.is_empty());
+        assert_eq!(
+            windows.exe_file,
+            Some("quartermaster-m-1.2.3.exe".into())
+        );
+
+        let linux = update_info_for(manifest, "linux").unwrap();
+        assert_eq!(linux.latest_version, "1.2.5");
+        assert_eq!(linux.exe_file, None);
+        assert_eq!(linux.dmg_file, None);
+        assert_eq!(
+            linux.linux_files,
+            vec!["QuarterMaster-M_1.2.5_x86_64.AppImage".to_string()]
         );
     }
 
@@ -414,5 +544,6 @@ mod tests {
              1.2.4:msi:QuarterMaster-M_1.2.4_x64_en-US.msi"
         )
         .is_err());
+        assert!(parse_manifest("1.2.3:appimage:../bad.AppImage").is_err());
     }
 }

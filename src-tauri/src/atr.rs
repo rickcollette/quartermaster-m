@@ -1,7 +1,6 @@
 use broadside_core::{
-    dos2::Dos2,
     execute,
-    image::{open_image, DiskImage},
+    image::open_image,
     sparta::Sparta,
     Command, FsType, MediaType, OperationOptions,
 };
@@ -124,52 +123,18 @@ pub struct LocalTreeEntry {
 
 fn parse_fs(value: &str) -> Result<FsType, String> {
     match value.to_ascii_lowercase().as_str() {
-        "dos2" | "atari" => Ok(FsType::Dos2),
         "sparta" | "sparta2" | "sdx" => Ok(FsType::Sparta2),
-        _ => Err(format!("unsupported ATR filesystem: {value}")),
+        "dos2" | "atari" => Err("Atari DOS 2 ATRs are no longer supported; use SpartaDOS/X".into()),
+        _ => Err(format!("unsupported ATR filesystem: {value}; use SpartaDOS/X")),
     }
-}
-
-fn validate_dos2(image: &mut dyn DiskImage) -> broadside_core::Result<()> {
-    if image.total_sectors() < 368 {
-        return Err(broadside_core::BroadsideError::InvalidImage(
-            "image is too small for Atari DOS 2".into(),
-        ));
-    }
-    let vtoc = image.read_sector(360)?;
-    if vtoc.len() < 100 || vtoc[0] != 2 {
-        return Err(broadside_core::BroadsideError::InvalidImage(
-            "not an Atari DOS 2 VTOC".into(),
-        ));
-    }
-    let declared = u16::from_le_bytes([vtoc[1], vtoc[2]]) as u32;
-    let free = u16::from_le_bytes([vtoc[3], vtoc[4]]) as u32;
-    if declared == 0 || declared > image.total_sectors() || free > declared {
-        return Err(broadside_core::BroadsideError::InvalidImage(
-            "invalid Atari DOS 2 VTOC sector counts".into(),
-        ));
-    }
-    let mut dos = Dos2::new(image);
-    dos.check()?;
-    dos.list("*.*")?;
-    Ok(())
 }
 
 fn detect_fs(path: &PathBuf) -> Result<FsType, String> {
     let mut image = open_image(path, Some(MediaType::Atr)).map_err(|e| e.to_string())?;
-    match Sparta::new(image.as_mut()).and_then(|mut sparta| sparta.free_sectors().map(|_| ())) {
-        Ok(()) => return Ok(FsType::Sparta2),
-        Err(sparta_error) => {
-            drop(image);
-            let mut image = open_image(path, Some(MediaType::Atr)).map_err(|e| e.to_string())?;
-            validate_dos2(image.as_mut()).map_err(|dos_error| {
-                format!(
-                    "could not detect ATR filesystem as SpartaDOS 2 or Atari DOS 2: {sparta_error}; {dos_error}"
-                )
-            })?;
-        }
-    }
-    Ok(FsType::Dos2)
+    Sparta::new(image.as_mut())
+        .and_then(|mut sparta| sparta.free_sectors().map(|_| ()))
+        .map_err(|error| format!("unsupported ATR filesystem; mount a SpartaDOS/X ATR: {error}"))?;
+    Ok(FsType::Sparta2)
 }
 
 fn persisted_mount_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
@@ -216,10 +181,7 @@ fn persist_state(app: &tauri::AppHandle, state: &FileManagerState) -> Result<(),
                 .map(|mounted| {
                     mounted.as_ref().map(|mounted| PersistedMountedAtr {
                         path: mounted.path.to_string_lossy().into_owned(),
-                        filesystem: match mounted.fs {
-                            FsType::Dos2 => "dos2".into(),
-                            FsType::Sparta2 => "sparta2".into(),
-                        },
+                        filesystem: "sparta2".into(),
                     })
                 })
                 .collect(),
@@ -233,6 +195,7 @@ fn persist_state(app: &tauri::AppHandle, state: &FileManagerState) -> Result<(),
     Ok(())
 }
 
+#[cfg(not(target_os = "macos"))]
 fn restore_state(app: &tauri::AppHandle) -> Result<FileManagerState, String> {
     let path = persisted_mount_path(app)?;
     if !path.exists() {
@@ -248,9 +211,12 @@ fn restore_state(app: &tauri::AppHandle) -> Result<FileManagerState, String> {
     };
     for (index, mounted) in persisted.drives.into_iter().take(DRIVE_COUNT).enumerate() {
         if let Some(mounted) = mounted {
+            let Ok(fs) = parse_fs(&mounted.filesystem) else {
+                continue;
+            };
             let restored = MountedAtr {
                 path: PathBuf::from(mounted.path),
-                fs: parse_fs(&mounted.filesystem)?,
+                fs,
             };
             drive_status_for(index, state.active_drive, restored.clone())?;
             state.drives[index] = Some(restored);
@@ -260,30 +226,12 @@ fn restore_state(app: &tauri::AppHandle) -> Result<FileManagerState, String> {
 }
 
 fn tree_for(mounted: &MountedAtr) -> Result<Vec<AtrTreeEntry>, String> {
-    let mut image = open_image(&mounted.path, Some(MediaType::Atr)).map_err(|e| e.to_string())?;
-    match mounted.fs {
-        FsType::Dos2 => {
-            let mut dos = Dos2::new(image.as_mut());
-            let mut entries = dos
-                .list("*.*")
-                .map_err(|e| e.to_string())?
-                .into_iter()
-                .map(|entry| AtrTreeEntry {
-                    path: entry.name.clone(),
-                    name: entry.name,
-                    is_directory: false,
-                    size_bytes: entry.size_bytes as u64,
-                    children: vec![],
-                })
-                .collect::<Vec<_>>();
-            sort_tree_entries(&mut entries);
-            Ok(entries)
-        }
-        FsType::Sparta2 => {
-            let mut sparta = Sparta::new(image.as_mut()).map_err(|e| e.to_string())?;
-            sparta_tree(&mut sparta, "", 0)
-        }
+    if mounted.fs != FsType::Sparta2 {
+        return Err("Atari DOS 2 ATRs are no longer supported; use SpartaDOS/X".into());
     }
+    let mut image = open_image(&mounted.path, Some(MediaType::Atr)).map_err(|e| e.to_string())?;
+    let mut sparta = Sparta::new(image.as_mut()).map_err(|e| e.to_string())?;
+    sparta_tree(&mut sparta, "", 0)
 }
 
 fn sparta_tree(
@@ -341,11 +289,7 @@ pub(crate) fn options(command: Command, mounted: &MountedAtr) -> OperationOption
         input: None,
         output: None,
         name: None,
-        mask: if mounted.fs == FsType::Sparta2 {
-            ">*".into()
-        } else {
-            "*.*".into()
-        },
+        mask: ">*".into(),
         list_format: None,
         volume_label: None,
         force: false,
@@ -357,16 +301,14 @@ pub(crate) fn extract_file_bytes(
     mounted: &MountedAtr,
     image_name: &str,
 ) -> Result<Vec<u8>, String> {
-    let mut image = open_image(&mounted.path, Some(MediaType::Atr)).map_err(|e| e.to_string())?;
-    match mounted.fs {
-        FsType::Dos2 => Dos2::new(image.as_mut())
-            .extract(image_name)
-            .map_err(|e| e.to_string()),
-        FsType::Sparta2 => Sparta::new(image.as_mut())
-            .map_err(|e| e.to_string())?
-            .extract(image_name)
-            .map_err(|e| e.to_string()),
+    if mounted.fs != FsType::Sparta2 {
+        return Err("Atari DOS 2 ATRs are no longer supported; use SpartaDOS/X".into());
     }
+    let mut image = open_image(&mounted.path, Some(MediaType::Atr)).map_err(|e| e.to_string())?;
+    Sparta::new(image.as_mut())
+        .map_err(|e| e.to_string())?
+        .extract(image_name)
+        .map_err(|e| e.to_string())
 }
 
 pub(crate) fn add_file_bytes(
@@ -374,16 +316,14 @@ pub(crate) fn add_file_bytes(
     image_name: &str,
     bytes: &[u8],
 ) -> Result<(), String> {
-    let mut image = open_image(&mounted.path, Some(MediaType::Atr)).map_err(|e| e.to_string())?;
-    match mounted.fs {
-        FsType::Dos2 => Dos2::new(image.as_mut())
-            .insert(image_name, bytes)
-            .map_err(|e| e.to_string()),
-        FsType::Sparta2 => Sparta::new(image.as_mut())
-            .map_err(|e| e.to_string())?
-            .insert(image_name, bytes)
-            .map_err(|e| e.to_string()),
+    if mounted.fs != FsType::Sparta2 {
+        return Err("Atari DOS 2 ATRs are no longer supported; use SpartaDOS/X".into());
     }
+    let mut image = open_image(&mounted.path, Some(MediaType::Atr)).map_err(|e| e.to_string())?;
+    Sparta::new(image.as_mut())
+        .map_err(|e| e.to_string())?
+        .insert(image_name, bytes)
+        .map_err(|e| e.to_string())
 }
 
 fn replace_file_bytes(
@@ -392,68 +332,40 @@ fn replace_file_bytes(
     bytes: &[u8],
     overwrite: bool,
 ) -> Result<(), String> {
-    let mut image = open_image(&mounted.path, Some(MediaType::Atr)).map_err(|e| e.to_string())?;
-    match mounted.fs {
-        FsType::Dos2 => {
-            let mut dos = Dos2::new(image.as_mut());
-            let exists = dos
-                .list("*.*")
-                .map_err(|e| e.to_string())?
-                .iter()
-                .any(|entry| entry.name.eq_ignore_ascii_case(image_name));
-            if !exists {
-                return dos.insert(image_name, bytes).map_err(|e| e.to_string());
-            }
-            if !overwrite {
-                return Err(format!("{image_name} already exists"));
-            }
-            let original = dos.extract(image_name).map_err(|e| e.to_string())?;
-            dos.delete(image_name, false).map_err(|e| e.to_string())?;
-            if let Err(error) = dos.insert(image_name, bytes) {
-                return match dos.insert(image_name, &original) {
-                    Ok(()) => Err(error.to_string()),
-                    Err(restore_error) => Err(format!(
-                        "{error}; restoring the original file also failed: {restore_error}"
-                    )),
-                };
-            }
-            Ok(())
-        }
-        FsType::Sparta2 => {
-            let split = image_name.rfind(['>', '/', '\\']);
-            let (parent, name) = split
-                .map(|index| (&image_name[..index], &image_name[index + 1..]))
-                .unwrap_or(("", image_name));
-            let mut sparta = Sparta::new(image.as_mut()).map_err(|e| e.to_string())?;
-            let existing = sparta
-                .list(parent, "*")
-                .map_err(|e| e.to_string())?
-                .into_iter()
-                .find(|entry| entry.name.eq_ignore_ascii_case(name));
-            let Some(existing) = existing else {
-                return sparta.insert(image_name, bytes).map_err(|e| e.to_string());
-            };
-            if existing.is_dir() {
-                return Err(format!("{image_name} is a directory"));
-            }
-            if !overwrite {
-                return Err(format!("{image_name} already exists"));
-            }
-            let original = sparta.extract(image_name).map_err(|e| e.to_string())?;
-            sparta
-                .delete(image_name, false)
-                .map_err(|e| e.to_string())?;
-            if let Err(error) = sparta.insert(image_name, bytes) {
-                return match sparta.insert(image_name, &original) {
-                    Ok(()) => Err(error.to_string()),
-                    Err(restore_error) => Err(format!(
-                        "{error}; restoring the original file also failed: {restore_error}"
-                    )),
-                };
-            }
-            Ok(())
-        }
+    if mounted.fs != FsType::Sparta2 {
+        return Err("Atari DOS 2 ATRs are no longer supported; use SpartaDOS/X".into());
     }
+    let mut image = open_image(&mounted.path, Some(MediaType::Atr)).map_err(|e| e.to_string())?;
+    let split = image_name.rfind(['>', '/', '\\']);
+    let (parent, name) = split
+        .map(|index| (&image_name[..index], &image_name[index + 1..]))
+        .unwrap_or(("", image_name));
+    let mut sparta = Sparta::new(image.as_mut()).map_err(|e| e.to_string())?;
+    let existing = sparta
+        .list(parent, "*")
+        .map_err(|e| e.to_string())?
+        .into_iter()
+        .find(|entry| entry.name.eq_ignore_ascii_case(name));
+    let Some(existing) = existing else {
+        return sparta.insert(image_name, bytes).map_err(|e| e.to_string());
+    };
+    if existing.is_dir() {
+        return Err(format!("{image_name} is a directory"));
+    }
+    if !overwrite {
+        return Err(format!("{image_name} already exists"));
+    }
+    let original = sparta.extract(image_name).map_err(|e| e.to_string())?;
+    sparta.delete(image_name, false).map_err(|e| e.to_string())?;
+    if let Err(error) = sparta.insert(image_name, bytes) {
+        return match sparta.insert(image_name, &original) {
+            Ok(()) => Err(error.to_string()),
+            Err(restore_error) => Err(format!(
+                "{error}; restoring the original file also failed: {restore_error}"
+            )),
+        };
+    }
+    Ok(())
 }
 
 fn atari_file_name(path: &Path) -> Result<String, String> {
@@ -502,11 +414,8 @@ fn atr_destination_path(
     let directory = destination_directory
         .trim()
         .trim_matches(|character| matches!(character, '>' | '/' | '\\'));
-    if mounted.fs == FsType::Dos2 {
-        if !directory.is_empty() {
-            return Err("Atari DOS 2 disks do not support subdirectories".into());
-        }
-        return Ok(name.to_ascii_uppercase());
+    if mounted.fs != FsType::Sparta2 {
+        return Err("Atari DOS 2 ATRs are no longer supported; use SpartaDOS/X".into());
     }
     Ok(if directory.is_empty() {
         name.to_ascii_uppercase()
@@ -743,6 +652,7 @@ pub fn atr_create(
         path: image_path,
         fs,
     };
+    #[allow(unused_mut)]
     let mut guard = state
         .0
         .lock()
@@ -803,12 +713,25 @@ pub fn atr_status(
     state: tauri::State<'_, AtrState>,
     app: tauri::AppHandle,
 ) -> Result<AtrStatus, String> {
+    #[allow(unused_mut)]
     let mut guard = state
         .0
         .lock()
         .map_err(|_| "ATR state lock failed".to_string())?;
     if guard.local_folder.is_none() && guard.drives.iter().all(Option::is_none) {
-        *guard = restore_state(&app)?;
+        // Windows can safely reopen persisted host paths. On macOS, a path
+        // restored from JSON does not carry the security authorization granted
+        // by the native file picker. Such an ATR can appear mounted and remain
+        // readable while writes are denied. Require an explicit Mount each app
+        // session so the selected file has a current write scope.
+        #[cfg(not(target_os = "macos"))]
+        {
+            *guard = restore_state(&app)?;
+        }
+        #[cfg(target_os = "macos")]
+        {
+            let _ = &app;
+        }
     }
     status_for_state(&guard)
 }
@@ -867,6 +790,14 @@ pub fn atr_write_document(
     let mounted = current_for(&state, drive)?;
     let bytes = encode_document_bytes(&request)?;
     replace_file_bytes(&mounted, &image_name, &bytes, overwrite.unwrap_or(false))?;
+    let persisted = extract_file_bytes(&mounted, &image_name)?;
+    if persisted != bytes {
+        return Err(format!(
+            "save verification failed for {} in {}",
+            image_name,
+            mounted.path.display()
+        ));
+    }
     status(&state)
 }
 
@@ -1010,16 +941,14 @@ pub fn atr_rename_entry(
     state: tauri::State<'_, AtrState>,
 ) -> Result<AtrStatus, String> {
     let mounted = current_for(&state, drive)?;
-    let mut image = open_image(&mounted.path, Some(MediaType::Atr)).map_err(|e| e.to_string())?;
-    match mounted.fs {
-        FsType::Dos2 => Dos2::new(image.as_mut())
-            .rename(&image_name, &new_name)
-            .map_err(|e| e.to_string())?,
-        FsType::Sparta2 => Sparta::new(image.as_mut())
-            .map_err(|e| e.to_string())?
-            .rename(&image_name, &new_name)
-            .map_err(|e| e.to_string())?,
+    if mounted.fs != FsType::Sparta2 {
+        return Err("Atari DOS 2 ATRs are no longer supported; use SpartaDOS/X".into());
     }
+    let mut image = open_image(&mounted.path, Some(MediaType::Atr)).map_err(|e| e.to_string())?;
+    Sparta::new(image.as_mut())
+        .map_err(|e| e.to_string())?
+        .rename(&image_name, &new_name)
+        .map_err(|e| e.to_string())?;
     status(&state)
 }
 
@@ -1092,14 +1021,6 @@ mod tests {
     }
 
     #[test]
-    fn detects_dos2_atr() {
-        let path = temp_atr("dos2");
-        create_atr(&path, FsType::Dos2);
-        assert_eq!(detect_fs(&path).unwrap(), FsType::Dos2);
-        let _ = std::fs::remove_file(path);
-    }
-
-    #[test]
     fn detects_sparta_atr() {
         let path = temp_atr("sparta");
         create_atr(&path, FsType::Sparta2);
@@ -1157,34 +1078,6 @@ mod tests {
     }
 
     #[test]
-    fn renames_dos2_file() {
-        let path = temp_atr("dos2-rename");
-        let input = path.with_extension("txt");
-        create_atr(&path, FsType::Dos2);
-        std::fs::write(&input, b"HELLO").unwrap();
-        let mounted = MountedAtr {
-            path: path.clone(),
-            fs: FsType::Dos2,
-        };
-        let mut add = options(Command::Add, &mounted);
-        add.input = Some(input.clone());
-        add.output = Some(PathBuf::from("BEFORE.TXT"));
-        execute(&add).unwrap();
-
-        let mut image = open_image(&path, Some(MediaType::Atr)).unwrap();
-        Dos2::new(image.as_mut())
-            .rename("BEFORE.TXT", "AFTER.TXT")
-            .unwrap();
-        drop(image);
-        let tree = tree_for(&mounted).unwrap();
-        assert!(tree.iter().any(|entry| entry.name == "AFTER.TXT"));
-        assert!(!tree.iter().any(|entry| entry.name == "BEFORE.TXT"));
-
-        let _ = std::fs::remove_file(input);
-        let _ = std::fs::remove_file(path);
-    }
-
-    #[test]
     fn renames_sparta_directory_with_children() {
         let path = temp_atr("sparta-rename");
         create_atr(&path, FsType::Sparta2);
@@ -1213,34 +1106,68 @@ mod tests {
     }
 
     #[test]
-    fn document_save_can_replace_existing_dos2_and_sparta_files() {
-        for (name, fs, image_name) in [
-            ("dos2-replace", FsType::Dos2, "NOTES.ATA"),
-            ("sparta-replace", FsType::Sparta2, "DOCS>NOTES.ATA"),
-        ] {
-            let path = temp_atr(name);
-            create_atr(&path, fs);
-            let mounted = MountedAtr {
-                path: path.clone(),
-                fs,
-            };
-            if fs == FsType::Sparta2 {
-                execute(&options(Command::Mkdir("DOCS".into()), &mounted)).unwrap();
-            }
-            add_file_bytes(&mounted, image_name, b"OLD\x9b").unwrap();
+    fn document_save_can_replace_existing_sparta_file() {
+        let path = temp_atr("sparta-replace");
+        let image_name = "DOCS>NOTES.ATA";
+        create_atr(&path, FsType::Sparta2);
+        let mounted = MountedAtr {
+            path: path.clone(),
+            fs: FsType::Sparta2,
+        };
+        execute(&options(Command::Mkdir("DOCS".into()), &mounted)).unwrap();
+        add_file_bytes(&mounted, image_name, b"OLD\x9b").unwrap();
 
-            assert!(replace_file_bytes(&mounted, image_name, b"NEW\x9b", false).is_err());
-            assert_eq!(
-                extract_file_bytes(&mounted, image_name).unwrap(),
-                b"OLD\x9b"
-            );
+        assert!(replace_file_bytes(&mounted, image_name, b"NEW\x9b", false).is_err());
+        assert_eq!(
+            extract_file_bytes(&mounted, image_name).unwrap(),
+            b"OLD\x9b"
+        );
 
-            replace_file_bytes(&mounted, image_name, b"NEW\x9b", true).unwrap();
-            assert_eq!(
-                extract_file_bytes(&mounted, image_name).unwrap(),
-                b"NEW\x9b"
-            );
+        replace_file_bytes(&mounted, image_name, b"NEW\x9b", true).unwrap();
+        assert_eq!(
+            extract_file_bytes(&mounted, image_name).unwrap(),
+            b"NEW\x9b"
+        );
 
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn saves_to_external_atr_fixture_when_configured() {
+        let Some(source) = std::env::var_os("QUARTERMASTER_TEST_ATR") else {
+            return;
+        };
+        let in_place = std::env::var_os("QUARTERMASTER_TEST_ATR_IN_PLACE").is_some();
+        let path = if in_place {
+            PathBuf::from(&source)
+        } else {
+            let copy = temp_atr("external-save");
+            std::fs::copy(&source, &copy).expect("copy external ATR fixture");
+            copy
+        };
+        let image_name = std::env::var("QUARTERMASTER_TEST_ATR_FILENAME")
+            .unwrap_or_else(|_| "TEST2.UDL".into());
+        let mounted = MountedAtr {
+            path: path.clone(),
+            fs: detect_fs(&path).expect("detect external ATR filesystem"),
+        };
+        let expected = b"AUTOMATED QUARTERMASTER SAVE TEST\x9b";
+
+        replace_file_bytes(&mounted, &image_name, expected, true)
+            .expect("write automated file to external ATR");
+        assert_eq!(
+            extract_file_bytes(&mounted, &image_name).expect("reopen automated file"),
+            expected
+        );
+        assert!(
+            tree_for(&mounted)
+                .expect("read directory after save")
+                .iter()
+                .any(|entry| entry.name == image_name),
+            "automated file should appear in the saved ATR directory"
+        );
+
+        if !in_place {
             let _ = std::fs::remove_file(path);
         }
     }
@@ -1309,11 +1236,11 @@ mod tests {
     fn atr_to_atr_drag_preserves_original_bytes() {
         let source_path = temp_atr("drag-source");
         let destination_path = temp_atr("drag-destination");
-        create_atr(&source_path, FsType::Dos2);
+        create_atr(&source_path, FsType::Sparta2);
         create_atr(&destination_path, FsType::Sparta2);
         let source = MountedAtr {
             path: source_path.clone(),
-            fs: FsType::Dos2,
+            fs: FsType::Sparta2,
         };
         let destination = MountedAtr {
             path: destination_path.clone(),

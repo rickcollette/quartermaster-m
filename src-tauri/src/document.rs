@@ -156,10 +156,7 @@ pub(crate) fn decode_document_bytes(
 }
 
 pub(crate) fn encode_document_bytes(request: &SaveDocumentRequest) -> Result<Vec<u8>, String> {
-    if request.width == 0
-        || request.height == 0
-        || request.cells.len() < request.width * request.height
-    {
+    if request.width == 0 || request.cells.len() < request.width * request.height {
         return Err("document cell buffer is incomplete".into());
     }
     let mut output = Vec::new();
@@ -286,6 +283,19 @@ mod tests {
             encode_document_bytes(&request).unwrap(),
             vec![b'A', 0x9b, b'B' | 0x80]
         );
+    }
+
+    #[test]
+    fn empty_trimmed_document_saves_zero_bytes() {
+        let request = SaveDocumentRequest {
+            path: String::new(),
+            mode: DocumentMode::Atascii,
+            width: 40,
+            height: 0,
+            cells: vec![],
+            trim_trailing_spaces: true,
+        };
+        assert_eq!(encode_document_bytes(&request).unwrap(), Vec::<u8>::new());
     }
 
     #[test]

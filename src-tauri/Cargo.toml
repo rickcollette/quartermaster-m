@@ -1,6 +1,6 @@
 [package]
 name = "quartermaster-m"
-version = "1.0.31"
+version = "1.0.32"
 description = "QuarterMaster/M ATASCII text and screen editor"
 authors = ["Rick Collette"]
 edition = "2021"

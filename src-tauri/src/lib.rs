@@ -5,6 +5,7 @@ mod document;
 mod update;
 mod version;
 
+use std::time::Duration;
 use tauri::Manager;
 
 use atr::{
@@ -29,6 +30,10 @@ fn app_version() -> &'static str {
 
 #[tauri::command]
 fn app_ready(app: tauri::AppHandle) -> Result<(), String> {
+    reveal_main_window(&app)
+}
+
+fn reveal_main_window(app: &tauri::AppHandle) -> Result<(), String> {
     let main = app
         .get_webview_window("main")
         .ok_or_else(|| "main application window was not created".to_string())?;
@@ -53,6 +58,18 @@ pub fn run() {
     tauri::Builder::default()
         .manage(AtrState::default())
         .plugin(tauri_plugin_dialog::init())
+        .setup(|app| {
+            let app = app.handle().clone();
+            std::thread::spawn(move || {
+                std::thread::sleep(Duration::from_secs(10));
+                if app.get_webview_window("splashscreen").is_some() {
+                    // Do not leave an always-on-top splash covering an error if
+                    // frontend initialization fails before invoking app_ready.
+                    let _ = reveal_main_window(&app);
+                }
+            });
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
             app_version,
             app_ready,

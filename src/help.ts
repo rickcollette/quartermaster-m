@@ -107,7 +107,7 @@ const helpSections: HelpSection[] = [
         <dt>Add File</dt><dd>Import a host file into the selected drive/directory.</dd>
         <dt>Export ASCII</dt><dd>Create readable host text, detokenizing BASIC where possible.</dd>
         <dt>Extract Raw</dt><dd>Copy the exact native bytes to the host.</dd>
-        <dt>New Folder</dt><dd>Create a SpartaDOS directory. DOS 2 filesystems are flat.</dd>
+        <dt>New Folder</dt><dd>Create a SpartaDOS directory.</dd>
         <dt>Rename / Delete</dt><dd>Change or remove the selected file/directory after validation and confirmation.</dd>
         <dt>Refresh / Unmount</dt><dd>Reload the on-disk directory or close that drive slot.</dd>
       </dl>
@@ -123,24 +123,24 @@ const helpSections: HelpSection[] = [
   {
     id: "create-atr",
     title: "Create an ATR",
-    summary: "Filesystem choices, all presets, custom geometry, labels, and density details.",
+    summary: "SpartaDOS presets, custom geometry, labels, and density details.",
     body: `
       <h3>One configuration window</h3>
-      <p>ATR → Create ATR opens a single GUI. Choose a target drive, filesystem, geometry, and—when using SpartaDOS—a volume label. Select <strong>Choose File & Create</strong> only after the validation message is clear.</p>
+      <p>ATR → Create ATR opens a single GUI. Choose a target drive, SpartaDOS geometry, and volume label. Select <strong>Choose File & Create</strong> only after the validation message is clear.</p>
       <table class="help-data-table">
         <thead><tr><th>Preset</th><th>Sectors</th><th>Bytes/sector</th><th>Notes</th></tr></thead>
         <tbody>
           <tr><td>90K</td><td>720</td><td>128</td><td>Single density</td></tr>
           <tr><td>130K</td><td>1,040</td><td>128</td><td>Enhanced density</td></tr>
           <tr><td>180K</td><td>720</td><td>256</td><td>Double density</td></tr>
-          <tr><td>360K</td><td>1,440</td><td>256</td><td>Double-sided DD; SpartaDOS required</td></tr>
-          <tr><td>16M</td><td>65,535</td><td>256</td><td>Large partition; SpartaDOS required</td></tr>
-          <tr><td>Custom</td><td>16–65,535</td><td>128 or 256</td><td>Limits depend on filesystem</td></tr>
+          <tr><td>360K</td><td>1,440</td><td>256</td><td>Double-sided DD</td></tr>
+          <tr><td>16M</td><td>65,535</td><td>256</td><td>Large partition</td></tr>
+          <tr><td>Custom</td><td>16–65,535</td><td>128 or 256</td><td>SpartaDOS/X image</td></tr>
         </tbody>
       </table>
-      <p>DOS 2 custom images accept 368–1,040 sectors. SpartaDOS custom images accept 16–65,535 sectors. Double-density ATR images retain 128-byte sectors for boot sectors 1–3 and use the selected 256-byte size afterward.</p>
+      <p>SpartaDOS custom images accept 16–65,535 sectors. Double-density ATR images retain 128-byte sectors for boot sectors 1–3 and use the selected 256-byte size afterward.</p>
       <h3>Volume labels</h3>
-      <p>SpartaDOS labels contain 1–8 letters, numbers, spaces, underscores, or hyphens and must begin with a letter or number. Labels are uppercased. DOS 2 does not use this field.</p>
+      <p>SpartaDOS labels contain 1–8 letters, numbers, spaces, underscores, or hyphens and must begin with a letter or number. Labels are uppercased.</p>
     `,
   },
   {
@@ -252,7 +252,7 @@ const helpSections: HelpSection[] = [
       <p class="support-url"><a href="${SUPPORT_URL}" target="_blank" rel="noopener noreferrer">${SUPPORT_URL}</a></p>
       <button type="button" class="help-copy-button" data-copy-support>Copy support URL</button>
       <h3>Check for updates</h3>
-      <p>Choose <strong>Help → Check for Updates</strong>. QuarterMaster/M compares its installed semantic version with the published release manifest. On Windows, <strong>Download Portable EXE</strong> saves the versioned executable beside the copy currently running, and <strong>Download &amp; Install MSI</strong> downloads the package to a temporary update folder and launches Windows Installer. On macOS, <strong>Download macOS DMG</strong> downloads the universal disk image to the update folder and opens it.</p>
+      <p>Choose <strong>Help → Check for Updates</strong>. QuarterMaster/M compares its installed semantic version with the published release manifest for the current platform only. On Windows, <strong>Download Portable EXE</strong> saves the versioned executable beside the copy currently running, and <strong>Download &amp; Install MSI</strong> downloads the package to a temporary update folder and launches Windows Installer. On macOS, <strong>Download macOS DMG</strong> downloads the universal disk image to the update folder and opens it. On Linux, relevant package names are shown when published.</p>
       <p class="help-callout">The portable Windows download requires write access to the current application folder and expects WebView2 to be installed. The MSI is the recommended Windows choice for a normal installation and bare-machine prerequisites. macOS builds are distributed as universal DMGs.</p>
       <h3>Include this information</h3>
       <ul>

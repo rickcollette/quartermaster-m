@@ -28,10 +28,11 @@ export interface UpdateInfo {
   currentVersion: string;
   latestVersion: string;
   state: "available" | "current" | "newer";
-  platform: "windows" | "macos" | "other";
+  platform: "windows" | "macos" | "linux" | "other";
   exeFile: string | null;
   msiFile: string | null;
   dmgFile: string | null;
+  linuxFiles: string[];
 }
 
 export interface UpdateDownload {

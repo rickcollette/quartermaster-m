@@ -278,9 +278,8 @@ def write_checksums() -> None:
 
 
 def write_current_version(version: str, exe_name: str, msi_name: str) -> None:
-    dmg_name = f"QuarterMaster-M_{version}_universal.dmg"
     (ROOT / "current-version").write_text(
-        f"{version}:exe:{exe_name}\n{version}:msi:{msi_name}\n{version}:dmg:{dmg_name}\n",
+        f"{version}:exe:{exe_name}\n{version}:msi:{msi_name}\n",
         encoding="utf-8",
     )
 

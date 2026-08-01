@@ -31,7 +31,7 @@ The startup splash is generated during `npm run build` and `npm run tauri dev`: 
 - Exports ATR content as readable Windows text or extracts exact raw bytes.
 - Tokenizes and detokenizes Atari BASIC natively in Rust—no console utility or external converter is required.
 - Shows an immediate splash screen and animated activity feedback for longer operations.
-- Checks the published release manifest from **Help → Check for Updates**, with Windows portable EXE/MSI updates and a macOS universal DMG update.
+- Checks the published release manifest from **Help → Check for Updates**, showing only packages relevant to the current platform.
 - Starts as a Windows GUI application without opening a command window.
 
 ## Quick start
